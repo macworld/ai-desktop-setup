@@ -24,3 +24,32 @@ class PublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp);(p/'bundle').write_bytes(b'changed')
             with self.assertRaises(ValueError):m.publish(p,p/'bundle','0'*64,'example/repo','v1.2.3','a'*40)
+
+    def test_immutable_settings_requires_http_200_before_reading_body(self):
+        import io
+        from unittest.mock import patch
+        m=self.module()
+        class Reply(io.BytesIO):
+            def __init__(self,status,body):
+                super().__init__(body);self.status=status;self.body_read=False
+            def read(self,*args):
+                self.body_read=True
+                return super().read(*args)
+        class Opener:
+            def __init__(self,reply):self.reply=reply
+            def open(self,*args,**kwargs):return self.reply
+        for status in (200,201,202,204,301,403,404,500):
+            reply=Reply(status,b'{"enabled":true}')
+            with self.subTest(status=status), patch.dict(m.os.environ,{'RELEASE_SETTINGS_TOKEN':'nonsecret-fixture'},clear=True), patch.object(m.urllib.request,'build_opener',return_value=Opener(reply)):
+                if status==200:
+                    m.immutable_settings('example/repo')
+                    self.assertTrue(reply.body_read)
+                else:
+                    with self.assertRaisesRegex(ValueError,'^Immutable release settings unavailable or disabled$'):
+                        m.immutable_settings('example/repo')
+                    self.assertFalse(reply.body_read)
+        for body in (b'{"enabled":false}',b'{"enabled":"true"}',b'{"enabled":1}',b'{}'):
+            reply=Reply(200,body)
+            with self.subTest(body=body), patch.dict(m.os.environ,{'RELEASE_SETTINGS_TOKEN':'nonsecret-fixture'},clear=True), patch.object(m.urllib.request,'build_opener',return_value=Opener(reply)):
+                with self.assertRaisesRegex(ValueError,'^Immutable release settings unavailable or disabled$'):
+                    m.immutable_settings('example/repo')

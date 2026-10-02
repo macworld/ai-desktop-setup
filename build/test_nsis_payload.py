@@ -57,12 +57,12 @@ class WrapperContractTests(NsisTests):
             p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(expected[name])
             parent=Path(name).parent.as_posix();dest='$PayloadPath'+('\\'+parent.replace('/','\\') if parent!='.' else '')
             include.extend([f'SetOutPath "{dest}"',f'File "{p.as_posix()}"'])
-        inc=self.root/'payload.nsh';inc.write_text('\n'.join(include)+'\n')
+        inc=self.root/'payload.nsh';inc.write_text('\n'.join(include)+'\n',encoding='utf-8')
         wrapper=root/'packaging/launcher.nsi'
         if alter:
-            source=wrapper.read_text().replace('Icon "../App/Assets/app.ico"',f'Icon "{root.as_posix()}/App/Assets/app.ico"')
+            source=wrapper.read_text(encoding='utf-8').replace('Icon "../App/Assets/app.ico"',f'Icon "{root.as_posix()}/App/Assets/app.ico"')
             source=source.replace('StrCpy $PayloadPath "$PLUGINSDIR\\app"',alter)
-            wrapper=self.root/'changed.nsi';wrapper.write_text(source)
+            wrapper=self.root/'changed.nsi';wrapper.write_text(source,encoding='utf-8')
         target=self.root/(architecture+'.exe');prefix='/' if os.name=='nt' else '-'
         subprocess.run([self.compiler,prefix+'NOCONFIG',prefix+'V1',*[prefix+'D'+x for x in ('PAYLOAD_DIR='+str(self.root),'PAYLOAD_INCLUDE='+str(inc),'OUTPUT_FILE='+str(target),'VERSION=1.2.3','ARCH='+architecture)],str(wrapper)],check=True,capture_output=True)
         return self.m.decode(target.read_bytes()),expected
@@ -95,3 +95,26 @@ class WrapperContractTests(NsisTests):
     def test_forged_section_disk_estimate_rejected(self):
         d,expected=self.wrapper();d['section_sizes']=[0]
         with self.assertRaises(ValueError):self.m.verify_payload(d,expected,'x64')
+
+    def test_modified_wrapper_round_trips_utf8_under_ansi_default(self):
+        from unittest.mock import patch
+        original_open=Path.open
+        def ansi_default(path,mode='r',buffering=-1,encoding=None,errors=None,newline=None):
+            if 'b' not in mode and encoding in (None,'locale'):encoding='cp1252'
+            return original_open(path,mode,buffering,encoding,errors,newline)
+        fixture_root=self.root
+        alter='StrCpy $PayloadPath "$TEMP\\app"'
+        for folder in ('ascii','目录'):
+            with self.subTest(folder=folder):
+                self.root=fixture_root/folder;self.root.mkdir()
+                try:
+                    with patch.object(Path,'open',ansi_default):
+                        decoded,expected=self.wrapper(alter=alter)
+                except UnicodeError as error:
+                    self.fail('Wrapper fixture must use UTF-8 regardless of ambient ANSI encoding: '+str(error))
+                root=Path(__file__).resolve().parents[1]
+                original=(root/'packaging/launcher.nsi').read_text(encoding='utf-8')
+                expected_source=original.replace('Icon "../App/Assets/app.ico"',f'Icon "{root.as_posix()}/App/Assets/app.ico"').replace('StrCpy $PayloadPath "$PLUGINSDIR\\app"',alter)
+                self.assertEqual((self.root/'changed.nsi').read_text(encoding='utf-8'),expected_source)
+                self.assertIn(folder,(self.root/'payload.nsh').read_text(encoding='utf-8'))
+                with self.assertRaises(ValueError):self.m.verify_payload(decoded,expected,'x64')

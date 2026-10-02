@@ -25,6 +25,7 @@ def immutable_settings(repository):
         def redirect_request(self,*args,**kwargs):return None
     try:
         with urllib.request.build_opener(NoRedirect).open(request,timeout=30) as response:
+            if response.status != 200:raise ValueError('Unexpected immutable-settings HTTP status')
             require_immutable(json.load(response))
     except Exception:
         raise ValueError('Immutable release settings unavailable or disabled') from None
