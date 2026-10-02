@@ -1,4 +1,5 @@
 using AiDesktopSetup.Core;
+using AiDesktopSetup.Core.Protocol;
 
 namespace AiDesktopSetup.Tests;
 
@@ -23,6 +24,20 @@ public class SetupDiagnosticsTests
             Assert.DoesNotContain(directory, content);
         }
         finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact] public void ProtocolDiagnosticsDropsRequestIdsAndUnknownRemoteCodes()
+    {
+        var directory = Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N"));
+        try
+        {
+            var log = new SetupDiagnostics(directory);
+            log.RecordProtocolFailure(new("access_denied","FAKE_secret_request_id"));
+            log.RecordProtocolFailure(new("FAKE_remote_secret_code","FAKE_secret_request_id"));
+            var text = File.ReadAllText(log.FilePath);
+            Assert.Contains("ProtocolFailure code=403",text); Assert.Contains("ProtocolFailure code=0",text); Assert.DoesNotContain("FAKE_",text);
+        }
+        finally { Directory.Delete(directory,true); }
     }
 
     [Fact]

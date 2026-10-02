@@ -2,6 +2,9 @@ using System.Net;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using AiDesktopSetup.Core;
+using AiDesktopSetup.Core.Protocol;
+using AiDesktopSetup.Core.Recovery;
+using AiDesktopSetup.Tests.Protocol;
 
 namespace AiDesktopSetup.Tests;
 
@@ -10,10 +13,10 @@ public sealed class ConfigurationCompatibilityTests : IDisposable
     private const string Token = "sk-fixture-not-a-real-token";
     private const string OriginalConfig = "model = \"old\"\n";
     private const string OriginalAuth = "{\"keep\":true}";
-    private readonly string root = Path.Combine(Path.GetTempPath(), "ai-desktop-setup-config-compat-" + Guid.NewGuid().ToString("N"));
+    private readonly string root = Path.Combine(ProtocolFixtures.TemporaryDirectory(), "ai-desktop-setup-config-compat-" + Guid.NewGuid().ToString("N"));
 
     public ConfigurationCompatibilityTests() => Directory.CreateDirectory(root);
-    public void Dispose() => Directory.Delete(FixturePath(root), true);
+    public void Dispose() { Directory.Delete(FixturePath(root), true); if (Directory.Exists(root + ".journal")) Directory.Delete(root + ".journal", true); }
 
     [Theory]
     [InlineData("config.toml")]
@@ -25,9 +28,9 @@ public sealed class ConfigurationCompatibilityTests : IDisposable
         var target = Path.Combine(root, "missing-target");
         var link = Path.Combine(home, fileName);
         TestCompat.CreateFileSymbolicLink(link, target);
-        var service = new ConfigurationService();
+        var service = Service();
 
-        var error = await Assert.ThrowsAsync<SetupException>(() => service.ConfigureAsync(Configuration, Token, home));
+        var error = await Assert.ThrowsAsync<SetupException>(() => service.ConfigureAsync(Configuration, new ApiCredential(Token), home));
 
         Assert.Contains("符号链接或重解析点", error.Message);
         Assert.False(File.Exists(target));
@@ -43,7 +46,7 @@ public sealed class ConfigurationCompatibilityTests : IDisposable
         if (!RuntimeCompat.IsWindows) return;
         if (overwrite) WritePublicFixtureFiles();
 
-        var result = await Service().ConfigureAsync(Configuration, Token, root);
+        var result = await Service().ConfigureAsync(Configuration, new ApiCredential(Token), root);
 
         foreach (var name in new[] { "config.toml", "auth.json" })
             AssertPrivateFile(Path.Combine(root, name));
@@ -64,7 +67,7 @@ public sealed class ConfigurationCompatibilityTests : IDisposable
             throw new IOException("simulated failure after both replacements");
         });
 
-        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, root, progress));
+        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), root, progress));
 
         var configPath = Path.Combine(root, "config.toml");
         var authPath = Path.Combine(root, "auth.json");
@@ -107,13 +110,13 @@ public sealed class ConfigurationCompatibilityTests : IDisposable
 
         if (failAfterAccountWrites)
         {
-            await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, home, progress));
+            await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), home, progress));
             Assert.Equal(OriginalConfig, File.ReadAllText(configPath));
             Assert.Equal(OriginalAuth, File.ReadAllText(authPath));
         }
         else
         {
-            await Service().ConfigureAsync(Configuration, Token, home, progress);
+            await Service().ConfigureAsync(Configuration, new ApiCredential(Token), home, progress);
             Assert.Contains("model = \"example-model\"", File.ReadAllText(configPath));
             Assert.Contains(Token, File.ReadAllText(authPath));
         }
@@ -163,7 +166,7 @@ public sealed class ConfigurationCompatibilityTests : IDisposable
     }
 
     private static readonly CodexConfiguration Configuration = new("https://gateway.example/v1", "example-model", "high");
-    private static ConfigurationService Service() => new();
+    private ConfigurationService Service() => new(new ConfigurationJournal(root + ".journal", new ResumeId(Guid.NewGuid())));
     private sealed class ImmediateProgress(Action<SetupProgress> report) : IProgress<SetupProgress>
     {
         public void Report(SetupProgress value) => report(value);

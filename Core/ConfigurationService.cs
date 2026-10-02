@@ -5,7 +5,8 @@ using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
+using AiDesktopSetup.Core.Protocol;
+using AiDesktopSetup.Core.Recovery;
 
 namespace AiDesktopSetup.Core;
 
@@ -13,11 +14,13 @@ public sealed class SetupException(string message) : Exception(message);
 
 public sealed class ConfigurationService
 {
+    private readonly ConfigurationJournal journal;
+    public ConfigurationService(ConfigurationJournal journal) => this.journal = journal ?? throw new ArgumentNullException(nameof(journal));
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    public Task<ConfigurationResult> ConfigureAsync(CodexConfiguration configuration, string token, string codexHome, IProgress<SetupProgress>? progress = null, CancellationToken cancellationToken = default)
+    public Task<ConfigurationResult> ConfigureAsync(CodexConfiguration configuration, ApiCredential credential, string codexHome, IProgress<SetupProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
-        if (string.IsNullOrEmpty(token) || !Regex.IsMatch(token, "\\A[A-Za-z0-9._-]+\\z")) throw new SetupException("Token 为空或格式不正确，请重新复制完整 Token。");
+        if (credential is null) throw new ArgumentNullException(nameof(credential));
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(codexHome)) throw new SetupException("Codex 配置目录不能为空。");
         string home;
@@ -25,67 +28,93 @@ public sealed class ConfigurationService
         {
             home = Path.GetFullPath(codexHome);
 #if NETFRAMEWORK
-            // Framework and native file APIs must use the same extended path,
-            // including when the machine-wide long-path policy is disabled.
             home = ExtendedConfigurationPath(home);
 #endif
+            ResumeFileSecurity.CheckAncestors(home);
         }
         catch { throw new SetupException("Codex 配置目录无效。"); }
-        var configPath = Path.Combine(home, "config.toml"); var authPath = Path.Combine(home, "auth.json");
-        AssertRegular(home, directory: true); AssertRegular(configPath); AssertRegular(authPath);
-        byte[]? originalConfig; byte[]? originalAuth; string config; string auth;
+        return Task.FromResult(journal.Execute(() =>
+        {
+            if (journal.InspectCore() != ConfigurationRecoveryState.None) return journal.RecoverCore()!;
+            return Configure(configuration,credential,home,progress,cancellationToken);
+        }));
+    }
+    private ConfigurationResult Configure(CodexConfiguration configuration, ApiCredential credential, string home, IProgress<SetupProgress>? progress, CancellationToken cancellationToken)
+    {
+        var configPath = Path.Combine(home,"config.toml"); var authPath = Path.Combine(home,"auth.json");
+        AssertRegular(home,true); AssertRegular(configPath); AssertRegular(authPath);
+        byte[]? originalConfig = null; byte[]? originalAuth = null; byte[]? writtenConfig = null; byte[]? writtenAuth = null;
         try
         {
-            originalConfig = ReadOptional(configPath); originalAuth = ReadOptional(authPath);
-            config = ConservativeToml.Merge(originalConfig is null ? "" : Utf8.GetString(originalConfig), configuration);
-            var authObject = originalAuth is null ? new JsonObject() : JsonNode.Parse(Utf8.GetString(originalAuth).TrimStart('\uFEFF')) as JsonObject;
-            if (authObject is null) throw new SetupException("auth.json 不是有效对象，配置未修改。请保留原文件并联系支持。");
-            authObject["OPENAI_API_KEY"] = token; authObject["auth_mode"] = "apikey";
-            auth = authObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
-        }
-        catch (SetupException) { throw; }
-        catch { throw new SetupException("现有 config.toml / auth.json 无法安全读取或合并。配置未修改，请保留原文件并联系支持。"); }
-        cancellationToken.ThrowIfCancellationRequested();
-        var backup = Path.Combine(home, "ai-desktop-setup-backup." + Guid.NewGuid().ToString("N"));
-        var writtenConfig = Utf8.GetBytes(config); var writtenAuth = Utf8.GetBytes(auth);
-        var configReplaced = false; var authReplaced = false;
-        try
-        {
-            AssertRegular(home, directory: true);
-            if (!Directory.Exists(home)) CreatePrivateDirectory(home);
-            CreatePrivateDirectory(backup);
-            SaveBackup(backup, "config.toml", originalConfig); SaveBackup(backup, "auth.json", originalAuth);
-            WritePrivateFile(Path.Combine(backup, "config.toml.new"), writtenConfig);
-            WritePrivateFile(Path.Combine(backup, "auth.json.new"), writtenAuth);
-            cancellationToken.ThrowIfCancellationRequested();
-            // Another Codex instance may write while configuration is prepared. Do not overwrite it.
-            progress?.Report(new("writing-config", "正在保存 Codex 配置…"));
-            AssertUnchanged(configPath, originalConfig); AssertUnchanged(authPath, originalAuth);
-            MovePrivateFile(Path.Combine(backup, "config.toml.new"), configPath); configReplaced = true;
-            progress?.Report(new("writing-auth", "正在保存当前用户的凭据…"));
-            AssertUnchanged(authPath, originalAuth);
-            MovePrivateFile(Path.Combine(backup, "auth.json.new"), authPath); authReplaced = true;
-            // Consumers may cancel after both replacements; rollback remains a two-file transaction.
-            progress?.Report(new("config-written", "配置文件已保存。"));
-            cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(new ConfigurationResult(backup));
-        }
-        catch (Exception error)
-        {
+            string config; string auth;
             try
             {
-                if (authReplaced) Restore(authPath, originalAuth, writtenAuth, backup);
-                if (configReplaced) Restore(configPath, originalConfig, writtenConfig, backup);
+                originalConfig = ReadOptional(configPath); originalAuth = ReadOptional(authPath);
+                config = ConservativeToml.Merge(originalConfig == null ? "" : Utf8.GetString(originalConfig),configuration);
+                // Duplicate JSON keys are ambiguous, including nested objects; do not silently discard them.
+                var authObject = originalAuth == null ? new JsonObject() : JsonNode.Parse(StrictJson.Parse(Utf8.GetBytes(Utf8.GetString(originalAuth).TrimStart('\uFEFF')),4194304).GetRawText()) as JsonObject;
+                if (authObject == null) throw new SetupException("auth.json 不是有效对象，配置未修改。请保留原文件并联系支持。");
+                authObject["OPENAI_API_KEY"] = credential.Value; authObject["auth_mode"] = "apikey";
+                auth = authObject.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
             }
-            catch { throw new SetupException($"配置保存失败，自动恢复未完成。请完全退出 Codex，并从此备份目录手动恢复：{backup}"); }
-            if (error is OperationCanceledException) throw;
-            throw new SetupException("配置保存失败，已保留或恢复原文件。请检查目录权限、磁盘空间，并完全退出 Codex 后重试。");
+            catch (SetupException) { throw; }
+            catch { throw new SetupException("现有 config.toml / auth.json 无法安全读取或合并。配置未修改，请保留原文件并联系支持。"); }
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Directory.Exists(home)) CreatePrivateDirectory(home);
+            using var pins = ResumeFileSecurity.PinDirectories(home);
+            var backup = Path.Combine(home,"ai-desktop-setup-backup."+Guid.NewGuid().ToString("N")); CreatePrivateDirectory(backup);
+            SaveBackup(backup,"config.toml",originalConfig); SaveBackup(backup,"auth.json",originalAuth);
+            writtenConfig = Utf8.GetBytes(config); writtenAuth = Utf8.GetBytes(auth);
+            var configReplaced = false; var authReplaced = false;
+            try
+            {
+                var configStage = journal.Stage(writtenConfig); var authStage = journal.Stage(writtenAuth);
+                var intent = new ConfigurationIntent(backup,new[] {
+                    new ConfigurationFileIntent(configPath,originalConfig == null ? null : ConfigurationJournal.Hash(originalConfig),ConfigurationJournal.Hash(writtenConfig),Path.Combine(backup,"config.toml"+(originalConfig == null ? ".absent" : "")),configStage),
+                    new ConfigurationFileIntent(authPath,originalAuth == null ? null : ConfigurationJournal.Hash(originalAuth),ConfigurationJournal.Hash(writtenAuth),Path.Combine(backup,"auth.json"+(originalAuth == null ? ".absent" : "")),authStage) });
+                progress?.Report(new("config-before-prepare","Preparing configuration recovery."));
+                cancellationToken.ThrowIfCancellationRequested(); journal.PrepareCore(intent);
+                progress?.Report(new("config-prepared","Configuration recovery saved."));
+                progress?.Report(new("writing-config","正在保存 Codex 配置…"));
+                AssertUnchanged(configPath,originalConfig); AssertUnchanged(authPath,originalAuth);
+                ReplaceFromStage(configStage,configPath,writtenConfig); configReplaced = true;
+                progress?.Report(new("config-replaced","Configuration saved."));
+                progress?.Report(new("writing-auth","正在保存当前用户的凭据…"));
+                AssertUnchanged(authPath,originalAuth); ReplaceFromStage(authStage,authPath,writtenAuth); authReplaced = true;
+                progress?.Report(new("auth-replaced","Credentials saved."));
+                progress?.Report(new("config-written","配置文件已保存。"));
+                cancellationToken.ThrowIfCancellationRequested();
+                progress?.Report(new("config-before-commit","Confirming configuration recovery."));
+                journal.MarkCommittedCore();
+                progress?.Report(new("config-committed","Configuration committed."));
+                return new(backup,true);
+            }
+            catch (Exception error)
+            {
+                try
+                {
+                    if (authReplaced) Restore(authPath,originalAuth,writtenAuth,backup);
+                    if (configReplaced) Restore(configPath,originalConfig,writtenConfig,backup);
+                    // A failed concurrent-edit check must remain detectable as Conflict.
+                    if (journal.InspectCore() != ConfigurationRecoveryState.Conflict) journal.ClearCore();
+                }
+                catch { throw new SetupException($"配置保存失败，自动恢复未完成。请完全退出 Codex，并从此备份目录手动恢复：{backup}"); }
+                if (error is OperationCanceledException) throw;
+                throw new SetupException("配置保存失败，已保留或恢复原文件。请检查目录权限、磁盘空间，并完全退出 Codex 后重试。");
+            }
         }
         finally
         {
-            foreach (var name in new[] { "config.toml.new", "auth.json.new" })
-            { try { File.Delete(Path.Combine(backup, name)); } catch { /* private backup remains recoverable */ } }
+            foreach(var bytes in new[] {originalConfig,originalAuth,writtenConfig,writtenAuth}) if (bytes != null) Array.Clear(bytes,0,bytes.Length);
         }
+    }
+    private void ReplaceFromStage(string stage,string target,byte[] bytes)
+    {
+        ResumeFileSecurity.ValidatePrivate(stage,false);
+        if (ConfigurationJournal.Digest(stage) != ConfigurationJournal.Hash(bytes)) throw new SetupException("Configuration staging changed.");
+        var replacement = Path.Combine(journal.StagingDirectory,Guid.NewGuid().ToString("N")+".replace");
+        try { WritePrivateFile(replacement,bytes); MovePrivateFile(replacement,target); }
+        finally { if (File.Exists(replacement)) File.Delete(replacement); }
     }
 
     private static void AssertRegular(string path, bool directory = false)
@@ -109,7 +138,7 @@ public sealed class ConfigurationService
         catch (SetupException) { throw; }
         catch { throw new SetupException("无法检查配置路径，请检查目录权限后重试。"); }
     }
-    private static byte[]? ReadOptional(string path)
+    internal static byte[]? ReadOptional(string path)
     { AssertRegular(path); if (!File.Exists(path)) return null; if (new FileInfo(path).Length > 4194304) throw new SetupException("配置文件过大，无法安全合并。原文件未修改。"); return File.ReadAllBytes(path); }
     private static void AssertUnchanged(string path, byte[]? original)
     { var now = ReadOptional(path); if (original is null ? now is not null : now is null || !original.AsSpan().SequenceEqual(now)) throw new SetupException("配置已由其他进程更改，请完全退出 Codex 后重试。"); }
@@ -126,13 +155,13 @@ public sealed class ConfigurationService
             MovePrivateFile(staged, path);
         }
     }
-    private static void MovePrivateFile(string source, string destination)
+    internal static void MovePrivateFile(string source, string destination)
     {
 #if NETFRAMEWORK
         // Match File.Move(overwrite: true): an atomic same-volume rename retains
         // the private staging file ACL. File.Replace would keep the destination
         // ACL and could expose credentials that started with broad permissions.
-        if (!MoveFileEx(source, destination, 0x1))
+        if (!MoveFileEx(source, destination, 0x1 | 0x8))
             throw new IOException("Unable to replace the configuration file.", new Win32Exception(Marshal.GetLastWin32Error()));
 #else
         File.Move(source, destination, true);

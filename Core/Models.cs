@@ -19,4 +19,4 @@ public sealed record SetupProgress(string Stage, string Message, double? Percent
     }
 }
 public sealed record InstallState(bool Installed, bool NeedsSignOut = false, bool NeedsRestart = false);
-public sealed record ConfigurationResult(string BackupDirectory);
+public sealed record ConfigurationResult(string BackupDirectory, bool Committed = true);

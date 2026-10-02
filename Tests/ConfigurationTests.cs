@@ -2,6 +2,9 @@ using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
 using AiDesktopSetup.Core;
+using AiDesktopSetup.Core.Protocol;
+using AiDesktopSetup.Core.Recovery;
+using AiDesktopSetup.Tests.Protocol;
 using Xunit;
 
 namespace AiDesktopSetup.Tests;
@@ -9,12 +12,12 @@ namespace AiDesktopSetup.Tests;
 public sealed class ConfigurationTests : IDisposable
 {
     private const string Token = "sk-fixture-not-a-real-token";
-    private readonly string root = Path.Combine(Path.GetTempPath(), "ai-desktop-setup-config-tests-" + Guid.NewGuid().ToString("N"));
+    private readonly string root = Path.Combine(ProtocolFixtures.TemporaryDirectory(), "ai-desktop-setup-config-tests-" + Guid.NewGuid().ToString("N"));
     private static readonly CodexConfiguration Configuration = new("https://gateway.example/v1", "example-model", "high");
 
     public ConfigurationTests() => Directory.CreateDirectory(root);
-    public void Dispose() => Directory.Delete(root, true);
-    private static ConfigurationService Service() => new();
+    public void Dispose() { Directory.Delete(root, true); if (Directory.Exists(root + ".journal")) Directory.Delete(root + ".journal", true); }
+    private ConfigurationService Service() => new(new ConfigurationJournal(root + ".journal", new ResumeId(Guid.NewGuid())));
 
     [Fact]
     public async Task PreservesSettingsAndAuthWithExplicitConfigurationAndDistinctBackups()
@@ -23,7 +26,7 @@ public sealed class ConfigurationTests : IDisposable
         await TestCompat.WriteAllTextAsync(Path.Combine(root, "config.toml"), original);
         await TestCompat.WriteAllTextAsync(Path.Combine(root, "auth.json"), "{\"tokens\":{\"refresh_token\":\"fixture\"},\"extra\":42}");
         var messages = new List<SetupProgress>();
-        var result = await Service().ConfigureAsync(Configuration, Token, root, new ImmediateProgress(messages.Add));
+        var result = await Service().ConfigureAsync(Configuration, new ApiCredential(Token), root, new ImmediateProgress(messages.Add));
         var config = await TestCompat.ReadAllTextAsync(Path.Combine(root, "config.toml"));
         Assert.Contains("model = \"example-model\"", config);
         Assert.Contains("model_reasoning_effort = \"high\"", config);
@@ -40,7 +43,7 @@ public sealed class ConfigurationTests : IDisposable
         Assert.Equal("apikey", (string?)auth["auth_mode"]);
         Assert.Equal("fixture", (string?)auth["tokens"]!["refresh_token"]);
         Assert.Equal(42, (int?)auth["extra"]);
-        var second = await Service().ConfigureAsync(Configuration, Token, root);
+        var second = await Service().ConfigureAsync(Configuration, new ApiCredential(Token), root);
         Assert.NotEqual(result.BackupDirectory, second.BackupDirectory);
         Assert.Equal(config, await TestCompat.ReadAllTextAsync(Path.Combine(root, "config.toml")));
         Assert.DoesNotContain(Token, string.Join(" ", messages));
@@ -52,7 +55,7 @@ public sealed class ConfigurationTests : IDisposable
     [Fact]
     public async Task FreshConfigDoesNotSetReviewOrContextLimits()
     {
-        var result = await Service().ConfigureAsync(Configuration, Token, Path.Combine(root, "new-home"));
+        var result = await Service().ConfigureAsync(Configuration, new ApiCredential(Token), Path.Combine(root, "new-home"));
         var config = await TestCompat.ReadAllTextAsync(Path.Combine(root, "new-home", "config.toml"));
         Assert.DoesNotContain("review_model", config);
         Assert.DoesNotContain("model_context_window", config);
@@ -69,7 +72,7 @@ public sealed class ConfigurationTests : IDisposable
     {
         var setting = "[windows]\nsandbox = \"" + mode + "\"\n";
         await TestCompat.WriteAllTextAsync(Path.Combine(root, "config.toml"), setting);
-        await Service().ConfigureAsync(Configuration, Token, root);
+        await Service().ConfigureAsync(Configuration, new ApiCredential(Token), root);
         Assert.Contains(setting, await TestCompat.ReadAllTextAsync(Path.Combine(root, "config.toml")));
     }
 
@@ -90,7 +93,7 @@ public sealed class ConfigurationTests : IDisposable
     public async Task UnsupportedConfigIsUnchanged(string original)
     {
         await TestCompat.WriteAllTextAsync(Path.Combine(root, "config.toml"), original);
-        var error = await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, root));
+        var error = await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), root));
         Assert.DoesNotContain(Token, error.ToString());
         Assert.Equal(original, await TestCompat.ReadAllTextAsync(Path.Combine(root, "config.toml")));
         Assert.Single(Directory.GetFileSystemEntries(root));
@@ -101,10 +104,11 @@ public sealed class ConfigurationTests : IDisposable
     [InlineData("[{\"keep\":true}]")]
     [InlineData("null")]
     [InlineData("{broken")]
+    [InlineData("{\"tokens\":{\"key\":1,\"key\":2}}") ]
     public async Task InvalidAuthIsNotOverwritten(string original)
     {
         await TestCompat.WriteAllTextAsync(Path.Combine(root, "auth.json"), original);
-        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, root));
+        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), root));
         Assert.Equal(original, await TestCompat.ReadAllTextAsync(Path.Combine(root, "auth.json")));
         Assert.Single(Directory.GetFileSystemEntries(root));
     }
@@ -115,8 +119,9 @@ public sealed class ConfigurationTests : IDisposable
     [InlineData("sk-$command")]
     public async Task InvalidTokenDoesNotWrite(string token)
     {
-        var service = new ConfigurationService();
-        await Assert.ThrowsAsync<SetupException>(() => service.ConfigureAsync(Configuration, token, root));
+        var service = Service();
+        Assert.Throws<ProtocolException>(() => new ApiCredential(token));
+        await Task.CompletedTask;
         Assert.Empty(Directory.GetFileSystemEntries(root));
     }
 
@@ -127,7 +132,7 @@ public sealed class ConfigurationTests : IDisposable
         await TestCompat.WriteAllTextAsync(target, "keep");
         var home = Path.Combine(root, "home"); Directory.CreateDirectory(home);
         TestCompat.CreateFileSymbolicLink(Path.Combine(home, "auth.json"), target);
-        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, home));
+        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), home));
         Assert.Equal("keep", await TestCompat.ReadAllTextAsync(target));
         Assert.Single(Directory.GetFileSystemEntries(home));
     }
@@ -136,7 +141,7 @@ public sealed class ConfigurationTests : IDisposable
     public async Task CancellationBeforeWritesKeepsDirectoryUntouched()
     {
         using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Service().ConfigureAsync(Configuration, Token, root, cancellationToken: cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), root, cancellationToken: cancellation.Token));
         Assert.Empty(Directory.GetFileSystemEntries(root));
     }
 
@@ -146,7 +151,7 @@ public sealed class ConfigurationTests : IDisposable
         await TestCompat.WriteAllTextAsync(Path.Combine(root, "config.toml"), "model = \"old\"\n");
         await TestCompat.WriteAllTextAsync(Path.Combine(root, "auth.json"), "{\"keep\":true}");
         var progress = new ImmediateProgress(value => { if (value.Stage == "writing-auth") throw new IOException("simulated write failure"); });
-        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, root, progress));
+        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), root, progress));
         Assert.Equal("model = \"old\"\n", await TestCompat.ReadAllTextAsync(Path.Combine(root, "config.toml")));
         Assert.Equal("{\"keep\":true}", await TestCompat.ReadAllTextAsync(Path.Combine(root, "auth.json")));
         Assert.Single(Directory.GetDirectories(root, "ai-desktop-setup-backup.*"));
@@ -158,7 +163,7 @@ public sealed class ConfigurationTests : IDisposable
         var path = Path.Combine(root, "config.toml");
         await TestCompat.WriteAllTextAsync(path, "model = \"old\"\n");
         var progress = new ImmediateProgress(value => { if (value.Stage == "writing-config") File.WriteAllText(path, "model = \"external\"\n"); });
-        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, root, progress));
+        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), root, progress));
         Assert.Equal("model = \"external\"\n", await TestCompat.ReadAllTextAsync(path));
         Assert.False(File.Exists(Path.Combine(root, "auth.json")));
     }
@@ -181,7 +186,7 @@ public sealed class ConfigurationTests : IDisposable
             File.WriteAllText(authPath, "{\"external\":true}");
         });
 
-        var error = await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, root, progress));
+        var error = await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), root, progress));
 
         Assert.Equal("model = \"external\"\n", await TestCompat.ReadAllTextAsync(configPath));
         Assert.Equal("{\"external\":true}", await TestCompat.ReadAllTextAsync(authPath));
@@ -201,7 +206,7 @@ public sealed class ConfigurationTests : IDisposable
     {
         var original = "[desktop]\nlocaleOverride = \"" + locale + "\"\n";
         await TestCompat.WriteAllTextAsync(Path.Combine(root, "config.toml"), original);
-        await Service().ConfigureAsync(Configuration, Token, root);
+        await Service().ConfigureAsync(Configuration, new ApiCredential(Token), root);
         Assert.Contains(original, await TestCompat.ReadAllTextAsync(Path.Combine(root, "config.toml")));
     }
 
@@ -215,7 +220,7 @@ public sealed class ConfigurationTests : IDisposable
     {
         var path = Path.Combine(root, ".codex-global-state.json");
         File.WriteAllText(path, original);
-        var result = await Service().ConfigureAsync(Configuration, Token, root);
+        var result = await Service().ConfigureAsync(Configuration, new ApiCredential(Token), root);
         Assert.Equal(original, File.ReadAllText(path));
         Assert.DoesNotContain(Directory.GetFiles(result.BackupDirectory), file => Path.GetFileName(file).StartsWith(".codex-global-state"));
     }
@@ -223,7 +228,7 @@ public sealed class ConfigurationTests : IDisposable
     [Fact]
     public async Task FreshConfigurationDoesNotCreateDesktopState()
     {
-        await Service().ConfigureAsync(Configuration, Token, root);
+        await Service().ConfigureAsync(Configuration, new ApiCredential(Token), root);
         Assert.False(File.Exists(Path.Combine(root, ".codex-global-state.json")));
     }
 
@@ -234,7 +239,7 @@ public sealed class ConfigurationTests : IDisposable
         var target = Path.Combine(root, "outside-state"); File.WriteAllText(target, "not json");
         var link = Path.Combine(home, ".codex-global-state.json");
         TestCompat.CreateFileSymbolicLink(link, target);
-        await Service().ConfigureAsync(Configuration, Token, home);
+        await Service().ConfigureAsync(Configuration, new ApiCredential(Token), home);
         Assert.Equal("not json", File.ReadAllText(target));
         Assert.Equal(FileAttributes.ReparsePoint, File.GetAttributes(link) & FileAttributes.ReparsePoint);
     }
@@ -253,10 +258,36 @@ public sealed class ConfigurationTests : IDisposable
             Assert.Contains(Token, File.ReadAllText(Path.Combine(root, "auth.json")));
             throw new IOException("simulated failure after both replacements");
         });
-        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, Token, root, progress));
+        await Assert.ThrowsAsync<SetupException>(() => Service().ConfigureAsync(Configuration, new ApiCredential(Token), root, progress));
         Assert.True(reached);
         Assert.Equal("model = \"old\"\n", File.ReadAllText(Path.Combine(root, "config.toml")));
         Assert.Equal("{\"keep\":true}", File.ReadAllText(Path.Combine(root, "auth.json")));
+    }
+
+    [Theory]
+    [InlineData("EXAMPLE_FAKE~+/==")]
+    [InlineData("A+/~._-=")]
+    public async Task AcceptsGenericBearerCharacters(string key)
+    {
+        await Service().ConfigureAsync(Configuration, new ApiCredential(key), root);
+        var auth = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "auth.json")))!;
+        Assert.Equal(key, (string?)auth["OPENAI_API_KEY"]);
+    }
+
+    [Theory]
+    [InlineData("", null, false)]
+    [InlineData("model_reasoning_effort = \"low\" # user setting\n", null, true)]
+    [InlineData("model_reasoning_effort = \"high\"\n", "none", true)]
+    public async Task OptionalReasoningPreservesUserSettingOrWritesExplicitNone(string original, string? effort, bool hasReasoning)
+    {
+        File.WriteAllText(Path.Combine(root, "config.toml"), original);
+        await Service().ConfigureAsync(new("https://gateway.example/Tenant/v1/", "m\\\"\n[evil]", effort), new ApiCredential(Token), root);
+        var text = File.ReadAllText(Path.Combine(root, "config.toml"));
+        Assert.Equal(hasReasoning, text.Contains("model_reasoning_effort"));
+        if (effort == null && hasReasoning) Assert.Contains(original, text);
+        if (effort != null) Assert.Contains("model_reasoning_effort = \"none\"", text);
+        Assert.Contains("base_url = \"https://gateway.example/Tenant/v1/\"", text);
+        Assert.DoesNotContain("\n[evil]", text);
     }
 
     private sealed class ImmediateProgress(Action<SetupProgress> report) : IProgress<SetupProgress> { public void Report(SetupProgress value) => report(value); }

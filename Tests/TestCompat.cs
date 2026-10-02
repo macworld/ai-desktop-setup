@@ -116,3 +116,20 @@ internal static class TestCompat
     private static extern IntPtr LocalFree(IntPtr memory);
 #endif
 }
+
+#if !NETFRAMEWORK
+// An actual child process terminates without unwinding; recovery tests read durable files after restart.
+internal static class ConfigurationCrashProcess
+{
+    public static void Main(string[] args)
+    {
+        if (args.Length != 4 || args[0] != "configuration-crash") Environment.Exit(74);
+        var journal = new AiDesktopSetup.Core.Recovery.ConfigurationJournal(Path.Combine(args[1],"journal"),new AiDesktopSetup.Core.Protocol.ResumeId(Guid.Parse(args[2])));
+        var service = new AiDesktopSetup.Core.ConfigurationService(journal);
+        service.ConfigureAsync(new("https://gateway.example/Tenant/v1/","example-model",null),new AiDesktopSetup.Core.Protocol.ApiCredential("FAKE_worker_key~+/=="),Path.Combine(args[1],"home"),new TerminateAt(args[3])).GetAwaiter().GetResult();
+        Environment.Exit(75);
+    }
+    private sealed class TerminateAt(string stage) : IProgress<AiDesktopSetup.Core.SetupProgress>
+    { public void Report(AiDesktopSetup.Core.SetupProgress progress) { if (progress.Stage == stage) Environment.Exit(73); } }
+}
+#endif

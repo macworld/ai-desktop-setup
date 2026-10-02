@@ -101,10 +101,21 @@ public sealed class CredentialDelivery
 public sealed record ProtocolError(string Code, string RequestId);
 public sealed class SessionAccess
 {
-    public string SetupBaseUrl { get; } public string SessionId { get; } public DateTimeOffset ExpiresAt { get; }
+    public string SetupBaseUrl => Session.Snapshot.SetupBaseUrl;
+    public string ApiBaseUrl => Session.Snapshot.ApiBaseUrl;
+    public string SessionId => Session.Snapshot.SessionId;
+    public DateTimeOffset ExpiresAt => Session.Snapshot.ExpiresAt;
+    public CredentialType CredentialType => Session.CredentialType;
+    [JsonIgnore] public ValidatedSession Session { get; }
     [JsonIgnore] public ResumeSecret ResumeSecret { get; }
-    public SessionAccess(ValidatedSession session, ResumeSecret secret)
-    { SetupBaseUrl = session.Snapshot.SetupBaseUrl; SessionId = session.Snapshot.SessionId; ExpiresAt = session.Snapshot.ExpiresAt; ResumeSecret = secret; }
+    [JsonIgnore] public ApiCredential? OriginalCredential { get; }
+    public SessionAccess(ValidatedSession session, ResumeSecret secret) : this(session, secret, null, false) { }
+    public SessionAccess(ValidatedSession session, ResumeSecret secret, ApiCredential originalCredential) : this(session, secret, originalCredential, true) { }
+    private SessionAccess(ValidatedSession session, ResumeSecret secret, ApiCredential? originalCredential, bool provided)
+    {
+        if (session == null || secret == null || (session.CredentialType == CredentialType.ApiKey ? !provided || originalCredential == null : provided)) throw new ProtocolException();
+        Session = session; ResumeSecret = secret; OriginalCredential = originalCredential;
+    }
     public override string ToString() => "[redacted]";
 }
 public sealed record AuthenticatedSetup(ResumeId ResumeId, SessionAccess Access, ValidatedSession Session);

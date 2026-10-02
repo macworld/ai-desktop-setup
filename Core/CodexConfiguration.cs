@@ -5,12 +5,12 @@ public sealed class CodexConfiguration
 {
     public string ApiBaseUrl { get; }
     public string Model { get; }
-    public string ReasoningEffort { get; }
+    public string? ReasoningEffort { get; }
 
-    public CodexConfiguration(string apiBaseUrl, string model, string reasoningEffort)
+    public CodexConfiguration(string apiBaseUrl, string model, string? reasoningEffort)
     {
-        if (string.IsNullOrWhiteSpace(apiBaseUrl) || string.IsNullOrWhiteSpace(model) || string.IsNullOrWhiteSpace(reasoningEffort))
-            throw new SetupException("Configuration requires an API base URL, model and reasoning effort.");
+        if (string.IsNullOrWhiteSpace(apiBaseUrl) || string.IsNullOrWhiteSpace(model) || (reasoningEffort != null && string.IsNullOrWhiteSpace(reasoningEffort)))
+            throw new SetupException("Configuration requires an API base URL and model.");
         ApiBaseUrl = apiBaseUrl; Model = model; ReasoningEffort = reasoningEffort;
     }
 }

@@ -12,7 +12,8 @@ internal static class ConservativeToml
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
         var root = new Dictionary<string, string>(StringComparer.Ordinal)
-        { ["model"] = JsonSerializer.Serialize(configuration.Model), ["model_provider"] = "\"ai_gateway\"", ["model_reasoning_effort"] = JsonSerializer.Serialize(configuration.ReasoningEffort) };
+        { ["model"] = JsonSerializer.Serialize(configuration.Model), ["model_provider"] = "\"ai_gateway\"" };
+        if (configuration.ReasoningEffort != null) root["model_reasoning_effort"] = JsonSerializer.Serialize(configuration.ReasoningEffort);
         var provider = new Dictionary<string, string>(StringComparer.Ordinal)
         { ["name"] = "\"AI Gateway\"", ["base_url"] = JsonSerializer.Serialize(configuration.ApiBaseUrl), ["wire_api"] = "\"responses\"", ["requires_openai_auth"] = "true" };
         var output = new List<string>();
