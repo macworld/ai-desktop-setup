@@ -1,0 +1,554 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-desktop-setup.example/protocol/agsp-v1.schema.json",
+  "title": "AGSP v1 JSON message contract",
+  "$comment": "Select the appropriate $defs entry for the endpoint. This schema does not validate envelopes, HTTP headers, byte limits, URI normalization, bearer entropy, authorization, state or cross-field bindings. Unknown optional properties are inert; never map them to execution or configuration. Error bodies are fixed and closed.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/code"
+    },
+    {
+      "$ref": "#/$defs/bootstrap"
+    },
+    {
+      "$ref": "#/$defs/session"
+    },
+    {
+      "$ref": "#/$defs/credentials"
+    },
+    {
+      "$ref": "#/$defs/complete"
+    },
+    {
+      "$ref": "#/$defs/cancel"
+    },
+    {
+      "$ref": "#/$defs/error"
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]{1,80}(?![\\s\\S])",
+      "maxLength": 80
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])",
+      "maxLength": 100
+    },
+    "keyHint": {
+      "type": "string",
+      "minLength": 0,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])",
+      "maxLength": 32
+    },
+    "bearer": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._~+/-]+=*(?![\\s\\S])"
+    },
+    "proof": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048](?![\\s\\S])"
+    },
+    "baseUrl": {
+      "type": "string",
+      "pattern": "^[Hh][Tt][Tt][Pp][Ss]://[^\\s/?#@\\\\]+(?:/[^\\s?#\\\\]*)?(?![\\s\\S])",
+      "$comment": "Lexical screen only; strict URI parsing, host/port canonicalization, path safety and binding need semantic validation."
+    },
+    "setupBaseUrl": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/baseUrl"
+        },
+        {
+          "not": {
+            "pattern": "/(?![\\s\\S])"
+          }
+        }
+      ]
+    },
+    "assetUrl": {
+      "type": "string",
+      "pattern": "^[Hh][Tt][Tt][Pp][Ss]://[^\\s/?#@\\\\]+(?:[/?#][^\\s\\\\]*)?(?![\\s\\S])",
+      "$comment": "No URI userinfo or credential-bearing query; HTTPS, path safety and download policy require semantic validation."
+    },
+    "architecture": {
+      "enum": [
+        "x64",
+        "arm64"
+      ]
+    },
+    "appId": {
+      "const": "codex-desktop"
+    },
+    "credentialType": {
+      "enum": [
+        "setup_ticket",
+        "api_key"
+      ]
+    },
+    "utcTime": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|\\+00:00)(?![\\s\\S])"
+    },
+    "codeCredential": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/credentialType"
+        },
+        "value": {
+          "$ref": "#/$defs/bearer"
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "additionalProperties": true
+    },
+    "emptyRequest": {
+      "type": "object",
+      "maxProperties": 0
+    },
+    "code": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "installation_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "setup_base_url": {
+          "$ref": "#/$defs/setupBaseUrl"
+        },
+        "api_base_url": {
+          "$ref": "#/$defs/baseUrl"
+        },
+        "service_name": {
+          "$ref": "#/$defs/label"
+        },
+        "app_id": {
+          "$ref": "#/$defs/appId"
+        },
+        "credential": {
+          "$ref": "#/$defs/codeCredential"
+        }
+      },
+      "required": [
+        "version",
+        "installation_id",
+        "setup_base_url",
+        "api_base_url",
+        "service_name",
+        "app_id",
+        "credential"
+      ],
+      "additionalProperties": true
+    },
+    "bootstrap": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "installation_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "claim_id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-4[0-9A-Fa-f]{3}-[89AaBb][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}(?![\\s\\S])"
+        },
+        "credential_type": {
+          "$ref": "#/$defs/credentialType"
+        },
+        "setup_base_url": {
+          "$ref": "#/$defs/setupBaseUrl"
+        },
+        "api_base_url": {
+          "$ref": "#/$defs/baseUrl"
+        },
+        "app_id": {
+          "$ref": "#/$defs/appId"
+        },
+        "assistant_version": {
+          "$ref": "#/$defs/text"
+        },
+        "architecture": {
+          "$ref": "#/$defs/architecture"
+        }
+      },
+      "required": [
+        "version",
+        "installation_id",
+        "claim_id",
+        "credential_type",
+        "setup_base_url",
+        "api_base_url",
+        "app_id",
+        "assistant_version",
+        "architecture"
+      ],
+      "additionalProperties": true
+    },
+    "artifact": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/assetUrl"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
+        }
+      },
+      "required": [
+        "url",
+        "bytes",
+        "sha256"
+      ],
+      "additionalProperties": true
+    },
+    "mirror": {
+      "type": "object",
+      "properties": {
+        "app_id": {
+          "$ref": "#/$defs/appId"
+        },
+        "architecture": {
+          "$ref": "#/$defs/architecture"
+        },
+        "version": {
+          "$ref": "#/$defs/text"
+        },
+        "package": {
+          "$ref": "#/$defs/artifact"
+        },
+        "license": {
+          "$ref": "#/$defs/artifact"
+        }
+      },
+      "required": [
+        "app_id",
+        "architecture",
+        "version",
+        "package"
+      ],
+      "additionalProperties": true
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/label"
+        },
+        "logo_available": {
+          "type": "boolean"
+        },
+        "website_url": {
+          "$ref": "#/$defs/assetUrl"
+        },
+        "help_url": {
+          "$ref": "#/$defs/assetUrl"
+        }
+      },
+      "required": [
+        "name",
+        "logo_available"
+      ],
+      "additionalProperties": true
+    },
+    "selection": {
+      "type": "object",
+      "properties": {
+        "group_label": {
+          "$ref": "#/$defs/label"
+        },
+        "key_label": {
+          "$ref": "#/$defs/label"
+        },
+        "key_hint": {
+          "$ref": "#/$defs/keyHint"
+        }
+      },
+      "required": [
+        "group_label",
+        "key_label",
+        "key_hint"
+      ],
+      "additionalProperties": true
+    },
+    "client": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\u0000-\\u001f\\u007f]*(?![\\s\\S])",
+          "maxLength": 200
+        },
+        "wire_api": {
+          "const": "responses"
+        },
+        "reasoning_effort": {
+          "$ref": "#/$defs/text"
+        }
+      },
+      "required": [
+        "model",
+        "wire_api"
+      ],
+      "additionalProperties": true
+    },
+    "preflight": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "const": "passed"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": true
+    },
+    "session": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "session_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "state": {
+          "enum": [
+            "claimed",
+            "credentials_released",
+            "completed"
+          ]
+        },
+        "expires_at": {
+          "$ref": "#/$defs/utcTime"
+        },
+        "revision": {
+          "$ref": "#/$defs/text"
+        },
+        "setup_base_url": {
+          "$ref": "#/$defs/setupBaseUrl"
+        },
+        "api_base_url": {
+          "$ref": "#/$defs/baseUrl"
+        },
+        "app_id": {
+          "$ref": "#/$defs/appId"
+        },
+        "service": {
+          "$ref": "#/$defs/service"
+        },
+        "selection": {
+          "$ref": "#/$defs/selection"
+        },
+        "client": {
+          "$ref": "#/$defs/client"
+        },
+        "preflight": {
+          "$ref": "#/$defs/preflight"
+        },
+        "mirrors": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/mirror"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "session_id",
+        "state",
+        "expires_at",
+        "revision",
+        "setup_base_url",
+        "api_base_url",
+        "app_id",
+        "service",
+        "selection",
+        "client",
+        "preflight",
+        "mirrors"
+      ],
+      "additionalProperties": true
+    },
+    "serverCredential": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "api_key"
+        },
+        "delivery": {
+          "const": "server"
+        },
+        "value": {
+          "$ref": "#/$defs/bearer"
+        }
+      },
+      "required": [
+        "type",
+        "delivery",
+        "value"
+      ],
+      "additionalProperties": true
+    },
+    "clientCredential": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "api_key"
+        },
+        "delivery": {
+          "const": "provided_by_client"
+        }
+      },
+      "required": [
+        "type",
+        "delivery"
+      ],
+      "additionalProperties": true,
+      "not": {
+        "required": [
+          "value"
+        ]
+      }
+    },
+    "credentials": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "session_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "api_base_url": {
+          "$ref": "#/$defs/baseUrl"
+        },
+        "credential": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/serverCredential"
+            },
+            {
+              "$ref": "#/$defs/clientCredential"
+            }
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "session_id",
+        "api_base_url",
+        "credential"
+      ],
+      "additionalProperties": true
+    },
+    "complete": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "session_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "state": {
+          "const": "completed"
+        }
+      },
+      "required": [
+        "version",
+        "session_id",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "cancel": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1,
+          "type": "integer"
+        },
+        "session_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "state": {
+          "const": "canceled"
+        }
+      },
+      "required": [
+        "version",
+        "session_id",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "enum": [
+                "invalid_request",
+                "invalid_credential",
+                "access_denied",
+                "claim_conflict",
+                "configuration_unsupported",
+                "rate_limited",
+                "temporarily_unavailable"
+              ]
+            },
+            "request_id": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+(?![\\s\\S])"
+            }
+          },
+          "required": [
+            "code",
+            "request_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "error"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
