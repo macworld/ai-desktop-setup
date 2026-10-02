@@ -18,4 +18,5 @@
     <Reference Include="System.IO.Compression" />
     <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
+  <ItemGroup><None Include="../protocol/vectors.json" Link="vectors.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>
