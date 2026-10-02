@@ -10,6 +10,38 @@ public sealed class DpapiResumeStoreTests
         if (RuntimeCompat.IsWindows) return;
         Assert.Throws<PlatformNotSupportedException>(() => new DpapiResumeStore(Path.Combine(ProtocolFixtures.TemporaryDirectory(), "unused-resume-tests"), new FixedClock(), new CryptoRandomSource()));
     }
+    [WindowsFact]
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    public void NativeCreatedFilesHaveExactCurrentUserOwner()
+    {
+        var root = Path.Combine(ProtocolFixtures.TemporaryDirectory(), "native-owner-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            ResumeFileSecurity.EnsureDirectory(root);
+            using (ResumeFileSecurity.OpenLock(Path.Combine(root, "owned.lock"))) { }
+            ResumeFileSecurity.WriteNew(Path.Combine(root, "owned.stage"), new byte[] { 1, 2, 3 });
+            ResumeFileSecurity.ValidatePrivate(Path.Combine(root, "owned.lock"), false);
+            ResumeFileSecurity.ValidatePrivate(Path.Combine(root, "owned.stage"), false);
+            var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User;
+            foreach (var path in Directory.GetFiles(root))
+                Assert.Equal(sid, new FileInfo(path).GetAccessControl().GetOwner(typeof(System.Security.Principal.SecurityIdentifier)));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+    [WindowsFact] public async Task NativeConcurrentStoreCreationKeepsOneClaim()
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var root = Path.Combine(ProtocolFixtures.TemporaryDirectory(), "native-concurrent-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var clock = new FixedClock();
+                var claims = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => new DpapiResumeStore(root, clock, new CryptoRandomSource()).GetOrCreate(ProtocolFixtures.Code()))));
+                Assert.Single(claims.Select(c => c.ClaimId).Distinct()); Assert.Single(Directory.GetFiles(root, "*.resume"));
+            }
+            finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+        }
+    }
     [WindowsFact] public void NativeCurrentUserRoundTripAndPrivateAcl()
     {
         var root = Path.Combine(ProtocolFixtures.TemporaryDirectory(), "native-resume-tests-" + Guid.NewGuid().ToString("N"));

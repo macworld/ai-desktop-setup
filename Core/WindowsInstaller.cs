@@ -74,7 +74,7 @@ public sealed class WindowsInstaller
         if(plan.Action==InstallationAction.Unsupported || plan.Policy.Architecture!=machine.OsArchitecture) throw new SetupException("This Windows machine is unsupported.");
         if(plan.Action==InstallationAction.Register) return await RegisterAsync(cancellationToken).ConfigureAwait(false);
         progress?.Report(new("inspect", "正在检查 ChatGPT 桌面版 安装状态…"));
-        var existing = await InspectAsync(cancellationToken).ConfigureAwait(false);
+        var existing = new InstallState(CodexOfficialPolicy.Matches(machine.InstalledPackage, plan.Policy) && machine.InstalledPackage!.RegisteredForCurrentUser && machine.InstalledPackage.Version >= plan.Policy.MinimumVersion);
         if (existing.Installed && (plan.Package?.Version==null || machine.InstalledPackage!.Version>=Version.Parse(plan.Package.Version))) { SetupDiagnostics.Current.Record(SetupEvent.AlreadyInstalled); return existing; }
         if(plan.Action==InstallationAction.Skip) throw new SetupException("Package registration changed; inspect and resolve the installation plan again.");
         var downloadDirectory=WindowsInstallPipe.CreateDownloadDirectory();

@@ -197,16 +197,5 @@ public sealed class ConfigurationService
         else throw new PlatformNotSupportedException("The .NET Framework installer requires Windows.");
 #endif
     }
-    private static void WritePrivateFile(string path, byte[] bytes)
-    {
-        // Windows files inherit the private staging directory ACL before any bytes are written.
-#if NETFRAMEWORK
-        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-#else
-        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None };
-        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        using var stream = new FileStream(path, options);
-#endif
-        stream.Write(bytes, 0, bytes.Length); stream.Flush(true);
-    }
+    private static void WritePrivateFile(string path, byte[] bytes) => ResumeFileSecurity.WriteNew(path, bytes);
 }

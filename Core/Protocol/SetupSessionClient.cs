@@ -13,7 +13,16 @@ public sealed class ProtocolHttpException : Exception
     public ProtocolHttpException(ProtocolError error, TimeSpan? retryAfter = null) : base("Setup request failed.") { Error = error; RetryAfter = retryAfter; }
 }
 
-public sealed class SetupSessionClient
+public interface ISetupSessionClient
+{
+    Task<SessionSnapshot> BootstrapAsync(SetupCode code, ClaimRecord claim, ClientIdentity client, CancellationToken ct);
+    Task<SessionSnapshot> GetSessionAsync(SessionAccess access, CancellationToken ct);
+    Task<CredentialDelivery> GetCredentialsAsync(SessionAccess access, CancellationToken ct);
+    Task<SessionReceipt> CompleteAsync(SessionAccess access, CancellationToken ct);
+    Task<SessionReceipt> CancelAsync(SessionAccess access, CancellationToken ct);
+    Task<byte[]?> GetLogoAsync(SessionAccess access, CancellationToken ct);
+}
+public sealed class SetupSessionClient : ISetupSessionClient
 {
     private readonly ProtocolHttpClients clients;
     private readonly Action<byte[]> decodeLogo;
@@ -167,6 +176,7 @@ public sealed class SetupSessionClient
         }
     }
     private static bool IsPng(byte[] b) => b.Length >= 24 && new byte[] {137,80,78,71,13,10,26,10}.SequenceEqual(b.Take(8));
+    public static bool HasBoundedLogoDimensions(byte[] b) => b != null && b.Length <= 524288 && LogoDimensions(b);
     private static bool LogoDimensions(byte[] b)
     {
         if (IsPng(b))

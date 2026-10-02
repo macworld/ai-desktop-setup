@@ -10,6 +10,23 @@ public sealed class ResumeStoreTests : IDisposable
     private readonly FixedClock clock = new();
     private DpapiResumeStore Store(IResumeProtection? protection = null) => new(root, clock, new CryptoRandomSource(), protection ?? new TestProtection());
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    [Theory] [InlineData(true, false)] [InlineData(false, true)] [InlineData(true, true)]
+    public void InstallationRequirementsSurviveAuthenticationAdvanceAndRoundTrip(bool restart, bool signOut)
+    {
+        var store = Store(); var claim = store.GetOrCreate(ProtocolFixtures.Code());
+        var session = ProtocolFixtures.Validator().Validate(ProtocolFixtures.Code(), ProtocolFixtures.Session());
+        var record = store.Load(claim.ResumeId)!.WithInstallation(new(true, signOut, restart)).Authenticate(session).Advance(LocalStage.ConfigCommitted);
+        store.Save(record);
+        var loaded = Store().Load(claim.ResumeId)!;
+        Assert.Equal(restart, loaded.Installation!.NeedsRestart); Assert.Equal(signOut, loaded.Installation.NeedsSignOut);
+        Assert.True(loaded.Installation.Installed); Assert.Equal(LocalStage.ConfigCommitted, loaded.LocalStage);
+        Assert.Contains(claim.ResumeId, Store().ListAvailable());
+    }
+    [Fact] public void LegacyRecordAbsenceDoesNotInventInstallationReadiness()
+    {
+        var store = Store(); var claim = store.GetOrCreate(ProtocolFixtures.Code());
+        Assert.Null(Store().Load(claim.ResumeId)!.Installation);
+    }
     [Fact] public void ReusesClaimAfterCrash()
     {
         var first = Store().GetOrCreate(ProtocolFixtures.Code()); var recovered = Store().GetOrCreate(ProtocolFixtures.Code());

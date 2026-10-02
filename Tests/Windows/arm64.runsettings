@@ -1,0 +1,1 @@
+<RunSettings><RunConfiguration><TargetPlatform>ARM64</TargetPlatform><TargetFrameworkVersion>net481</TargetFrameworkVersion><MaxCpuCount>1</MaxCpuCount><TreatNoTestsAsError>true</TreatNoTestsAsError></RunConfiguration></RunSettings>

@@ -130,14 +130,15 @@ public sealed class ClaimRecord
 public sealed class ResumeRecord
 {
     public ClaimRecord Claim { get; } [JsonIgnore] public SetupCode Code { get; }
-    public DateTimeOffset CreatedAt { get; } public DateTimeOffset ExpiresAt { get; } public LocalStage LocalStage { get; } public SessionSnapshot? Snapshot { get; }
-    public ResumeRecord(ClaimRecord claim, SetupCode code, DateTimeOffset createdAt, DateTimeOffset expiresAt, LocalStage stage, SessionSnapshot? snapshot = null)
-    { Claim = claim; Code = code; CreatedAt = createdAt; ExpiresAt = expiresAt; LocalStage = stage; Snapshot = snapshot; }
+    public DateTimeOffset CreatedAt { get; } public DateTimeOffset ExpiresAt { get; } public LocalStage LocalStage { get; } public SessionSnapshot? Snapshot { get; } public InstallState? Installation { get; }
+    public ResumeRecord(ClaimRecord claim, SetupCode code, DateTimeOffset createdAt, DateTimeOffset expiresAt, LocalStage stage, SessionSnapshot? snapshot = null, InstallState? installation = null)
+    { Claim = claim; Code = code; CreatedAt = createdAt; ExpiresAt = expiresAt; LocalStage = stage; Snapshot = snapshot; Installation = installation; }
     public ResumeRecord Authenticate(ValidatedSession session)
     {
         if (session.CredentialType != Code.CredentialType || session.Snapshot.SetupBaseUrl != Code.SetupBaseUrl || session.Snapshot.ApiBaseUrl != Code.ApiBaseUrl) throw new ProtocolException();
-        return new(Claim, Code, CreatedAt, session.Snapshot.ExpiresAt, LocalStage < LocalStage.Authenticated ? LocalStage.Authenticated : LocalStage, session.Snapshot);
+        return new(Claim, Code, CreatedAt, session.Snapshot.ExpiresAt, LocalStage < LocalStage.Authenticated ? LocalStage.Authenticated : LocalStage, session.Snapshot, Installation);
     }
-    public ResumeRecord Advance(LocalStage stage) => stage < LocalStage || !Enum.IsDefined(typeof(LocalStage), stage) ? throw new ProtocolException() : new(Claim, Code, CreatedAt, ExpiresAt, stage, Snapshot);
+    public ResumeRecord WithInstallation(InstallState installation) => new(Claim, Code, CreatedAt, ExpiresAt, LocalStage, Snapshot, installation);
+    public ResumeRecord Advance(LocalStage stage) => stage < LocalStage || !Enum.IsDefined(typeof(LocalStage), stage) ? throw new ProtocolException() : new(Claim, Code, CreatedAt, ExpiresAt, stage, Snapshot, Installation);
     public override string ToString() => "[redacted]";
 }

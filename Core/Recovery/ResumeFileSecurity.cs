@@ -99,6 +99,13 @@ internal static class ResumeFileSecurity
     }
     internal static void WriteNew(string path, byte[] bytes)
     {
+        if (RuntimeCompat.IsWindows)
+        {
+            using var handle = Open(path, 0x40000000, 0, 1, 0x00200000);
+            CheckHandle(handle);
+            using var output = new FileStream(handle, FileAccess.Write);
+            output.Write(bytes, 0, bytes.Length); output.Flush(true); return;
+        }
 #if NETFRAMEWORK
         using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
 #else
@@ -119,11 +126,30 @@ internal static class ResumeFileSecurity
         else throw new PlatformNotSupportedException();
 #endif
     }
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static SafeFileHandle Open(string path, uint access, uint share, uint disposition, uint flags)
     {
-        var handle = CreateFile(path, access, share, IntPtr.Zero, disposition, flags, IntPtr.Zero);
-        if (handle.IsInvalid) { handle.Dispose(); throw new IOException("Resume file cannot be opened safely."); } return handle;
+        // Elevated tokens can default file ownership to Administrators even in a private
+        // current-user directory. Set exact owner and DACL atomically at creation.
+        GCHandle descriptor = default; var attributes = IntPtr.Zero;
+        try
+        {
+            if (disposition == 1 || disposition == 4)
+            {
+                var sid = WindowsIdentity.GetCurrent().User ?? throw new IOException("Current user is unavailable.");
+                var acl = new FileSecurity(); acl.SetOwner(sid); acl.SetAccessRuleProtection(true, false);
+                acl.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl, AccessControlType.Allow));
+                descriptor = GCHandle.Alloc(acl.GetSecurityDescriptorBinaryForm(), GCHandleType.Pinned);
+                attributes = Marshal.AllocHGlobal(Marshal.SizeOf<SecurityAttributes>());
+                Marshal.StructureToPtr(new SecurityAttributes { Length = Marshal.SizeOf<SecurityAttributes>(), Descriptor = descriptor.AddrOfPinnedObject() }, attributes, false);
+            }
+            var handle = CreateFile(path, access, share, attributes, disposition, flags, IntPtr.Zero);
+            if (handle.IsInvalid) { handle.Dispose(); throw new IOException("Resume file cannot be opened safely."); }
+            return handle;
+        }
+        finally { if (attributes != IntPtr.Zero) Marshal.FreeHGlobal(attributes); if (descriptor.IsAllocated) descriptor.Free(); }
     }
+    [StructLayout(LayoutKind.Sequential)] private struct SecurityAttributes { internal int Length; internal IntPtr Descriptor; internal int InheritHandle; }
     private static void CheckHandle(SafeFileHandle handle)
     { if (!GetFileInformationByHandle(handle, out var info) || (info.Attributes & (uint)FileAttributes.ReparsePoint) != 0) { handle.Dispose(); throw new IOException("Resume path is unsafe."); } }
     private sealed class Handles : IDisposable { private readonly List<IDisposable> handles; internal Handles(List<IDisposable> handles) => this.handles = handles; public void Dispose() { foreach (var h in handles) h.Dispose(); } }

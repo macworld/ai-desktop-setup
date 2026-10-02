@@ -1,12 +1,20 @@
 <Window x:Class="AiDesktopSetup.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="AI Desktop Setup" Icon="Assets/app.ico" Width="660" Height="380" MinWidth="560" MinHeight="320" WindowStartupLocation="CenterScreen" Background="White" FontFamily="Segoe UI" FontSize="15">
-  <StackPanel Margin="36">
-    <TextBlock Text="AI Desktop Setup" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,20" />
-    <TextBlock Text="This preview preserves the Windows installer baseline. Authenticated setup is still being implemented." Margin="0,0,0,14" />
-    <TextBlock Text="Install and configure will become available after the authenticated setup workflow is ready." Margin="0,0,0,28" />
-    <StackPanel Orientation="Horizontal">
-      <Button x:Name="InstallButton" Content="Install" IsEnabled="False" Margin="0,0,12,0" />
-      <Button x:Name="ConfigureButton" Content="Configure" IsEnabled="False" />
-    </StackPanel>
-  </StackPanel>
+    Title="AI Desktop Setup" Icon="Assets/app.ico" Width="760" Height="660" MinWidth="640" MinHeight="560" WindowStartupLocation="CenterScreen" Background="White" FontFamily="Segoe UI" FontSize="15" Closing="OnClosing">
+  <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="32">
+    <TextBlock Text="AI Desktop Setup" FontSize="28" FontWeight="SemiBold" Margin="0,0,0,12" />
+    <TextBlock Text="Paste setup code → Confirm service → Install and configure → Complete" TextWrapping="Wrap" Margin="0,0,0,20" />
+    <TextBlock Text="Setup code (kept private on this Windows account)" />
+    <DockPanel Margin="0,6,0,12"><Button x:Name="PasteButton" Content="Paste and preview" Click="PasteClick" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0"/><PasswordBox x:Name="CodeBox" Padding="6" PasswordChanged="CodeChanged" /></DockPanel>
+    <Button x:Name="PreviewButton" Content="Preview typed code" Click="PreviewClick" HorizontalAlignment="Left" Padding="12,6" />
+    <TextBlock x:Name="PreviewText" TextWrapping="Wrap" Margin="0,12" />
+    <Button x:Name="AuthenticateButton" Content="Confirm addresses and authenticate" Click="AuthenticateClick" IsEnabled="False" HorizontalAlignment="Left" Padding="12,6" />
+    <DockPanel Margin="0,12"><Image x:Name="ServiceLogo" Width="48" Height="48" DockPanel.Dock="Left" Margin="0,0,12,0"/><TextBlock x:Name="ServiceText" TextWrapping="Wrap" VerticalAlignment="Center" /></DockPanel>
+    <TextBlock Text="Install and configure may request administrator permission to install the official desktop client, and will back up and update this account’s Codex configuration." TextWrapping="Wrap" Margin="0,0,0,12" />
+    <StackPanel Orientation="Horizontal"><Button x:Name="InstallButton" Content="Install and configure" Click="InstallClick" IsEnabled="False" Padding="12,6"/><Button x:Name="HelpButton" Content="Service help" Click="HelpClick" IsEnabled="False" Padding="12,6" Margin="10,0,0,0" /></StackPanel>
+    <TextBlock Text="Interrupted setup on this account" Margin="0,20,0,6" />
+    <DockPanel><Button x:Name="ResumeButton" Content="Resume installation / retry receipt" Click="ResumeClick" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0"/><ComboBox x:Name="RecoveryList" MinWidth="220" SelectionChanged="RecoverySelectionChanged" /></DockPanel>
+    <ProgressBar x:Name="Progress" Height="6" Margin="0,18,0,12" Minimum="0" Maximum="100" />
+    <TextBlock x:Name="StatusText" Text="No network requests are made before you confirm a setup code." TextWrapping="Wrap" />
+    <StackPanel Orientation="Horizontal" Margin="0,20,0,0"><Button x:Name="CancelButton" Content="Cancel and clear recovery" Click="CancelClick" Padding="12,6"/><Button x:Name="LaunchButton" Content="Open desktop client" Click="LaunchClick" IsEnabled="False" Padding="12,6" Margin="10,0,0,0" /></StackPanel>
+  </StackPanel></ScrollViewer>
 </Window>

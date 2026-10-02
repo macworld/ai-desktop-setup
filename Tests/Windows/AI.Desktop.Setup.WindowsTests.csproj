@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Platforms>x64;ARM64</Platforms>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <PlatformTarget>$(Platform)</PlatformTarget>
+    <TargetFramework Condition="'$(Platform)' == 'x64'">net48</TargetFramework>
+    <TargetFramework Condition="'$(Platform)' == 'ARM64'">net481</TargetFramework>
+    <DefineConstants Condition="'$(Platform)' == 'x64'">$(DefineConstants);NATIVE_X64</DefineConstants>
+    <DefineConstants Condition="'$(Platform)' == 'ARM64'">$(DefineConstants);NATIVE_ARM64</DefineConstants>
+    <Prefer32Bit>false</Prefer32Bit>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsTestProject>true</IsTestProject><IsPackable>false</IsPackable>
+    <UseWPF>true</UseWPF><EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+  </PropertyGroup>
+  <Target Name="RequireNativePlatform" BeforeTargets="PrepareForBuild" Condition="'$(Platform)' != 'x64' And '$(Platform)' != 'ARM64'"><Error Text="Select Platform=x64 or Platform=ARM64." /></Target>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+    <ProjectReference Include="../../Core/AI.Desktop.Setup.Core.csproj" />
+    <Reference Include="System.Net.Http" /><Reference Include="System.IO.Compression" /><Reference Include="System.IO.Compression.FileSystem" />
+    <Using Include="Xunit" /><Using Include="System.IO" /><Using Include="System.Net.Http" />
+    <Compile Include="../*.cs" Link="Shared/%(Filename)%(Extension)" />
+    <Compile Include="../Protocol/**/*.cs;../Recovery/**/*.cs;../Workflow/**/*.cs" Exclude="**/obj/**/*.cs;**/bin/**/*.cs" Link="Shared/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="NativeHostTests.cs;NativeLogoTests.cs;NativeTrustProviderTests.cs" />
+    <Compile Include="../../App/BoundedLogoDecoder.cs" Link="App/BoundedLogoDecoder.cs" />
+    <None Include="../../protocol/vectors.json" Link="vectors.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

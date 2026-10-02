@@ -12,6 +12,7 @@
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
   </ItemGroup>
+  <ItemGroup><Compile Remove="Windows/**/*.cs" /></ItemGroup>
   <ItemGroup><Using Include="Xunit" /><ProjectReference Include="../Core/AI.Desktop.Setup.Core.csproj" /></ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <Using Include="System.Net.Http" />

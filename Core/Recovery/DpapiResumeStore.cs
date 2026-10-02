@@ -14,6 +14,18 @@ public sealed class DpapiResumeStore : IResumeStore
     { if (!RuntimeCompat.IsWindows) throw new PlatformNotSupportedException("Resume protection requires Windows."); }
     internal DpapiResumeStore(string root, IClock clock, IRandomSource random, IResumeProtection protection)
     { this.root = Path.GetFullPath(root); this.clock = clock ?? throw new ArgumentNullException(nameof(clock)); this.random = random ?? throw new ArgumentNullException(nameof(random)); this.protection = protection; }
+    public IReadOnlyList<ResumeId> ListAvailable()
+    {
+        using var transaction = Enter();
+        var ids = new List<ResumeId>();
+        foreach (var path in Directory.GetFiles(root, "*.resume"))
+        {
+            if (!Guid.TryParseExact(Path.GetFileNameWithoutExtension(path), "D", out var id)) throw new IOException("Resume record is invalid.");
+            var resumeId = new ResumeId(id);
+            if (LoadCore(resumeId) != null) ids.Add(resumeId);
+        }
+        return ids;
+    }
     public ClaimRecord GetOrCreate(SetupCode code)
     {
         using var transaction = Enter();
@@ -62,7 +74,7 @@ public sealed class DpapiResumeStore : IResumeStore
             var claim = new ClaimRecord(id, claimId, ResumeSecret.Parse(StrictJson.String(json, "resume_secret")));
             if (!Enum.TryParse<LocalStage>(StrictJson.String(json, "local_stage"), out var stage) || !Enum.IsDefined(typeof(LocalStage), stage)) throw new ProtocolException();
             var snapshot = json.TryGetProperty("snapshot", out var saved) ? SessionSnapshot.ParseStored(Encoding.UTF8.GetBytes(saved.GetRawText())) : null;
-            var record = new ResumeRecord(claim, code, StrictJson.UtcTime(StrictJson.String(json, "created_at")), StrictJson.UtcTime(StrictJson.String(json, "expires_at")), stage, snapshot);
+            var record = new ResumeRecord(claim, code, StrictJson.UtcTime(StrictJson.String(json, "created_at")), StrictJson.UtcTime(StrictJson.String(json, "expires_at")), stage, snapshot, json.TryGetProperty("installation", out var install) ? JsonSerializer.Deserialize<InstallState>(install.GetRawText()) : null);
             Validate(record, checkExpiry: false);
             if (clock.UtcNow >= record.ExpiresAt) { DeleteCore(id); return null; }
             return record;
@@ -87,6 +99,7 @@ public sealed class DpapiResumeStore : IResumeStore
         if (creating && RuntimeCompat.PathExists(RecordPath(record.Claim.ResumeId))) throw new IOException("Resume identifier collision.");
         var data = new Dictionary<string, object> { ["version"] = 1, ["resume_id"] = record.Claim.ResumeId.Value.ToString("D"), ["claim_id"] = record.Claim.ClaimId.ToString("D"), ["resume_secret"] = record.Claim.ResumeSecret.ToBearer(), ["code"] = record.Code.OriginalCode, ["created_at"] = record.CreatedAt.UtcDateTime.ToString("O"), ["expires_at"] = record.ExpiresAt.UtcDateTime.ToString("O"), ["local_stage"] = record.LocalStage.ToString() };
         if (record.Snapshot != null) data["snapshot"] = record.Snapshot.ToWire();
+        if (record.Installation != null) data["installation"] = record.Installation;
         var plain = JsonSerializer.SerializeToUtf8Bytes(data); byte[] encrypted;
         try
         {
