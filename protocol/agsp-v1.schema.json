@@ -380,7 +380,8 @@
           "maxItems": 2,
           "items": {
             "$ref": "#/$defs/mirror"
-          }
+          },
+          "$comment": "Optional; semantic validation canonicalizes omission to []. Explicit null and non-array values reject."
         }
       },
       "required": [
@@ -395,8 +396,7 @@
         "service",
         "selection",
         "client",
-        "preflight",
-        "mirrors"
+        "preflight"
       ],
       "additionalProperties": true
     },

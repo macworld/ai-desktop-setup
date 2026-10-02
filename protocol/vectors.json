@@ -156,7 +156,7 @@
     {
       "id": "code-duplicate-top-key",
       "kind": "code",
-      "input": "AGSP1.eyJ2ZXJzaW9uIjoxLCJ2ZXJzaW9uIjoxfQ",
+      "input": "AGSP1.eyJ2ZXJzaW9uIjoxLCJ2ZXJzaW9uIjoxLCJpbnN0YWxsYXRpb25faWQiOiJpbnNfZXhhbXBsZSIsInNldHVwX2Jhc2VfdXJsIjoiaHR0cHM6Ly9nYXRld2F5LmV4YW1wbGUvYXBpL2FpLXNldHVwL3YxIiwiYXBpX2Jhc2VfdXJsIjoiaHR0cHM6Ly9nYXRld2F5LmV4YW1wbGUvdjEiLCJzZXJ2aWNlX25hbWUiOiJFeGFtcGxlIEFJIiwiYXBwX2lkIjoiY29kZXgtZGVza3RvcCIsImNyZWRlbnRpYWwiOnsidHlwZSI6InNldHVwX3RpY2tldCIsInZhbHVlIjoiRVhBTVBMRV9PUEFRVUVfVElDS0VUX05PX1BSSVZBVEVfUFJFRklYfisvPT0ifX0",
       "expected": {
         "accept": false,
         "error_code": "invalid_request"
@@ -165,7 +165,7 @@
     {
       "id": "code-duplicate-escaped-key",
       "kind": "code",
-      "input": "AGSP1.eyJ2ZXJzaW9uIjoxLCJcdTAwNzZlcnNpb24iOjF9",
+      "input": "AGSP1.eyJcdTAwNzZlcnNpb24iOjEsInZlcnNpb24iOjEsImluc3RhbGxhdGlvbl9pZCI6Imluc19leGFtcGxlIiwic2V0dXBfYmFzZV91cmwiOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS9hcGkvYWktc2V0dXAvdjEiLCJhcGlfYmFzZV91cmwiOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS92MSIsInNlcnZpY2VfbmFtZSI6IkV4YW1wbGUgQUkiLCJhcHBfaWQiOiJjb2RleC1kZXNrdG9wIiwiY3JlZGVudGlhbCI6eyJ0eXBlIjoic2V0dXBfdGlja2V0IiwidmFsdWUiOiJFWEFNUExFX09QQVFVRV9USUNLRVRfTk9fUFJJVkFURV9QUkVGSVh-Ky89PSJ9fQ",
       "expected": {
         "accept": false,
         "error_code": "invalid_request"
@@ -174,7 +174,7 @@
     {
       "id": "code-duplicate-nested-key",
       "kind": "code",
-      "input": "AGSP1.eyJjcmVkZW50aWFsIjp7InR5cGUiOiJzZXR1cF90aWNrZXQiLCJ0eXBlIjoiYXBpX2tleSJ9fQ",
+      "input": "AGSP1.eyJ2ZXJzaW9uIjoxLCJpbnN0YWxsYXRpb25faWQiOiJpbnNfZXhhbXBsZSIsInNldHVwX2Jhc2VfdXJsIjoiaHR0cHM6Ly9nYXRld2F5LmV4YW1wbGUvYXBpL2FpLXNldHVwL3YxIiwiYXBpX2Jhc2VfdXJsIjoiaHR0cHM6Ly9nYXRld2F5LmV4YW1wbGUvdjEiLCJzZXJ2aWNlX25hbWUiOiJFeGFtcGxlIEFJIiwiYXBwX2lkIjoiY29kZXgtZGVza3RvcCIsImNyZWRlbnRpYWwiOnsidHlwZSI6InNldHVwX3RpY2tldCIsInR5cGUiOiJzZXR1cF90aWNrZXQiLCJ2YWx1ZSI6IkVYQU1QTEVfT1BBUVVFX1RJQ0tFVF9OT19QUklWQVRFX1BSRUZJWH4rLz09In19",
       "expected": {
         "accept": false,
         "error_code": "invalid_request"
@@ -183,7 +183,7 @@
     {
       "id": "code-malformed-utf8",
       "kind": "code",
-      "input": "AGSP1.eyJzZXJ2aWNlX25hbWUiOiLDKCJ9",
+      "input": "AGSP1.eyJ2ZXJzaW9uIjoxLCJpbnN0YWxsYXRpb25faWQiOiJpbnNfZXhhbXBsZSIsInNldHVwX2Jhc2VfdXJsIjoiaHR0cHM6Ly9nYXRld2F5LmV4YW1wbGUvYXBpL2FpLXNldHVwL3YxIiwiYXBpX2Jhc2VfdXJsIjoiaHR0cHM6Ly9nYXRld2F5LmV4YW1wbGUvdjEiLCJzZXJ2aWNlX25hbWUiOiJFeGFtcGxlIMMoIEFJIiwiYXBwX2lkIjoiY29kZXgtZGVza3RvcCIsImNyZWRlbnRpYWwiOnsidHlwZSI6InNldHVwX3RpY2tldCIsInZhbHVlIjoiRVhBTVBMRV9PUEFRVUVfVElDS0VUX05PX1BSSVZBVEVfUFJFRklYfisvPT0ifX0",
       "expected": {
         "accept": false,
         "error_code": "invalid_request"
@@ -580,7 +580,7 @@
     {
       "id": "bootstrap-duplicate-json",
       "kind": "bootstrap",
-      "input": "{\"version\":1,\"version\":1}",
+      "input": "{\"version\":1,\"version\":1,\"installation_id\":\"ins_example\",\"claim_id\":\"38d9d2dc-8571-4be8-960b-fef631ed7122\",\"credential_type\":\"setup_ticket\",\"setup_base_url\":\"https://gateway.example/api/ai-setup/v1\",\"api_base_url\":\"https://gateway.example/v1\",\"app_id\":\"codex-desktop\",\"assistant_version\":\"1.0.0\",\"architecture\":\"x64\"}",
       "expected": {
         "accept": false,
         "http_status": 400,
@@ -3516,7 +3516,7 @@
       }
     },
     {
-      "id": "session-post-duplicate-json",
+      "id": "session-post-nonempty-json",
       "kind": "session",
       "input": {
         "operation": "complete",
@@ -3525,7 +3525,7 @@
           "headers": {
             "Authorization": "Bearer AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
           },
-          "body": "{\"ignored\":1,\"ignored\":2}"
+          "body": "{\"ignored\":1}"
         },
         "context": {
           "authorized": true,
@@ -4151,6 +4151,149 @@
       "expected": {
         "accept": false,
         "http_status": 400,
+        "error_code": "invalid_request"
+      }
+    },
+    {
+      "id": "session-mirrors-omitted",
+      "kind": "session",
+      "input": {
+        "version": 1,
+        "session_id": "ins_example",
+        "state": "claimed",
+        "expires_at": "2030-01-01T02:00:00Z",
+        "revision": "config-example-1",
+        "setup_base_url": "https://gateway.example/api/ai-setup/v1",
+        "api_base_url": "https://gateway.example/v1",
+        "app_id": "codex-desktop",
+        "service": {
+          "name": "Example AI",
+          "logo_available": false
+        },
+        "selection": {
+          "group_label": "Default service",
+          "key_label": "Desktop",
+          "key_hint": "ends in demo"
+        },
+        "client": {
+          "model": "example-model",
+          "wire_api": "responses",
+          "reasoning_effort": "high"
+        },
+        "preflight": {
+          "status": "passed"
+        }
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "version": 1,
+          "session_id": "ins_example",
+          "state": "claimed",
+          "expires_at": "2030-01-01T02:00:00Z",
+          "revision": "config-example-1",
+          "setup_base_url": "https://gateway.example/api/ai-setup/v1",
+          "api_base_url": "https://gateway.example/v1",
+          "app_id": "codex-desktop",
+          "service": {
+            "name": "Example AI",
+            "logo_available": false
+          },
+          "selection": {
+            "group_label": "Default service",
+            "key_label": "Desktop",
+            "key_hint": "ends in demo"
+          },
+          "client": {
+            "model": "example-model",
+            "wire_api": "responses",
+            "reasoning_effort": "high"
+          },
+          "preflight": {
+            "status": "passed"
+          },
+          "mirrors": []
+        }
+      }
+    },
+    {
+      "id": "session-mirrors-null",
+      "kind": "session",
+      "input": {
+        "version": 1,
+        "session_id": "ins_example",
+        "state": "claimed",
+        "expires_at": "2030-01-01T02:00:00Z",
+        "revision": "config-example-1",
+        "setup_base_url": "https://gateway.example/api/ai-setup/v1",
+        "api_base_url": "https://gateway.example/v1",
+        "app_id": "codex-desktop",
+        "service": {
+          "name": "Example AI",
+          "logo_available": false
+        },
+        "selection": {
+          "group_label": "Default service",
+          "key_label": "Desktop",
+          "key_hint": "ends in demo"
+        },
+        "client": {
+          "model": "example-model",
+          "wire_api": "responses",
+          "reasoning_effort": "high"
+        },
+        "preflight": {
+          "status": "passed"
+        },
+        "mirrors": null
+      },
+      "expected": {
+        "accept": false,
+        "error_code": "invalid_request"
+      }
+    },
+    {
+      "id": "session-mirrors-wrong-type",
+      "kind": "session",
+      "input": {
+        "version": 1,
+        "session_id": "ins_example",
+        "state": "claimed",
+        "expires_at": "2030-01-01T02:00:00Z",
+        "revision": "config-example-1",
+        "setup_base_url": "https://gateway.example/api/ai-setup/v1",
+        "api_base_url": "https://gateway.example/v1",
+        "app_id": "codex-desktop",
+        "service": {
+          "name": "Example AI",
+          "logo_available": false
+        },
+        "selection": {
+          "group_label": "Default service",
+          "key_label": "Desktop",
+          "key_hint": "ends in demo"
+        },
+        "client": {
+          "model": "example-model",
+          "wire_api": "responses",
+          "reasoning_effort": "high"
+        },
+        "preflight": {
+          "status": "passed"
+        },
+        "mirrors": {}
+      },
+      "expected": {
+        "accept": false,
+        "error_code": "invalid_request"
+      }
+    },
+    {
+      "id": "session-duplicate-nested-json",
+      "kind": "session",
+      "input": "{\"version\":1,\"session_id\":\"ins_example\",\"state\":\"claimed\",\"expires_at\":\"2030-01-01T02:00:00Z\",\"revision\":\"config-example-1\",\"setup_base_url\":\"https://gateway.example/api/ai-setup/v1\",\"api_base_url\":\"https://gateway.example/v1\",\"app_id\":\"codex-desktop\",\"service\":{\"name\":\"Example AI\",\"logo_available\":false},\"selection\":{\"group_label\":\"Default service\",\"key_label\":\"Desktop\",\"key_hint\":\"ends in demo\"},\"client\":{\"model\":\"example-model\",\"wire_api\":\"responses\",\"wire_api\":\"responses\",\"reasoning_effort\":\"high\"},\"preflight\":{\"status\":\"passed\"},\"mirrors\":[]}",
+      "expected": {
+        "accept": false,
         "error_code": "invalid_request"
       }
     }

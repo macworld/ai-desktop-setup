@@ -205,7 +205,8 @@ state 反映当前会话，其余配置字段保持同一快照：
 }
 ```
 
-示例中的日期、模型和标识仅作格式示意。除下面注明的可选字段外均必需；
+示例中的日期、模型和标识仅作格式示意。`mirrors` 为可选字段，缺省时规范化为 `[]`；
+显式 `null` 或非数组值必须拒绝。除下面注明的可选字段外均必需；
 expires_at 是 RFC 3339 UTC 时间，version 为整数，其余标识及文本字段为字符串。
 logo_available 为布尔值，mirrors 为数组。v1 wire_api 固定为 responses。
 服务及选择标签最多 100 字符，key_hint 最多 32 字符且禁止放完整 key；
@@ -224,7 +225,7 @@ preflight.status 只能为 passed，表示绑定权限、指定模型及接口�
 | service.logo_available | 是否提供受保护 Logo，不能用远端 Logo URL 提前绕过鉴权 |
 | selection.group_label、selection.key_label、selection.key_hint | 用户第一步的选择，仅标签及掩码 |
 | client.model、client.wire_api、client.reasoning_effort | 应用适配器允许的类型化配置 |
-| mirrors | 已支持应用、架构对应镜像数组；空数组使用官方源 |
+| mirrors | 可选的已支持应用、架构对应镜像数组；缺省规范化为 `[]`，空数组使用官方源；`null` 或非数组值拒绝 |
 
 首次响应不含最终 API Key。会话期间返回同一快照，不把后台配置变化静默注入正在安装的流程；
 撤销权限可以即时生效。若必须修改关键配置，终止会话并提示重新生成安装码。
@@ -291,7 +292,9 @@ API Key 不传给 Logo、帮助网站、包镜像、遥测或管理员安装进�
 ## 8. 安装包与镜像
 
 应用适配器定义官方来源、允许的包身份与发布者、架构、版本下限及安装方式。
-缺少 mirrors 时走该适配器的官方源；不存在该架构官方包时明确提示不支持。
+`mirrors` 缺省或为 `[]` 时走该适配器的官方源；
+缺省必须规范化为 `[]`，显式 `null` 或非数组值拒绝。
+不存在该架构官方包时明确提示不支持。
 合法服务商配置不能改变上述信任策略。
 
 v1 mirrors 数组每项固定包含 app_id、architecture、version、package；
@@ -424,6 +427,9 @@ vectors. JSON Schema validates structure only; semantic and HTTP checks are mand
   explicitly forbidden by a delivery mode (`value` for `provided_by_client`) still
   reject; errors keep their fixed shape and never carry discovery data. A client
   must reject unsupported required capabilities, not reinterpret them as optional.
+- `mirrors` is optional: normalize omission to `[]` before canonical comparison;
+  both select the official source. Explicit `null` and wrong-type values reject.
+  This default is a semantic rule, not a JSON Schema validator side effect.
 - Endpoint schemas are selected from `$defs`, not inferred from the root union.
   Success responses are HTTP 200. Error status/code mappings are fixed in section 9;
   `temporarily_unavailable` may use a 5xx status. Every setup response, including

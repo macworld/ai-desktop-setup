@@ -54,7 +54,10 @@ it does not instruct the client to invent a network response. A rejected server
 request fixture asserts that status/code and must reveal no discovery data.
 For accepted cases, compare the specified canonical object exactly after
 projecting to the known fields. Unknown optional fields disappear from that
-projection and can never influence behavior.
+projection and can never influence behavior. Normalize omitted `mirrors` to `[]`
+before canonical comparison; both omission and an empty array select the official
+source. Explicit `null` and non-array values reject. Schema validation does not
+insert this semantic default.
 
 | Kind and input shape | Validation and canonical object |
 | --- | --- |
@@ -76,7 +79,11 @@ a claimed length instead of checking those constructed raw bytes. The schema
 applies to `body`, not the fixture wrapper. Installation-code size cases contain
 the literal encoded bytes, including inert padding data; do not regenerate them.
 Malformed and duplicate-key cases preserve raw strings and must not pass through
-an ordinary parser before the strict parser being tested.
+an ordinary parser before the strict parser being tested. Duplicate-key and
+malformed-UTF-8 negatives are otherwise complete valid messages: dropping
+duplicates or replacing invalid UTF-8 would pass the remaining structural and
+semantic checks. The separate nonempty-session-POST case tests only the `{}`
+body rule and does not stand in for duplicate-key rejection.
 
 ## Stateful fixture model
 
