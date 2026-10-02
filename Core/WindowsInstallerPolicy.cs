@@ -49,7 +49,13 @@ internal static class WindowsInstallerPolicy
 
     internal static WindowsPackageIdentity ValidatePackage(string path, string architecture, Version osVersion, string? expectedVersion)
     {
-        using var archive = ZipFile.OpenRead(path);
+        using var stream = new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+        return ValidatePackage(stream,architecture,osVersion,expectedVersion);
+    }
+
+    internal static WindowsPackageIdentity ValidatePackage(Stream package, string architecture, Version osVersion, string? expectedVersion)
+    {
+        using var archive = new ZipArchive(package,ZipArchiveMode.Read,true);
         var entries = archive.Entries.Where(e => e.FullName == "AppxManifest.xml").ToArray();
         if (entries.Length != 1 || entries[0].Length > 1048576) throw new InvalidDataException("安装包清单缺失或不合法。");
         using var stream = entries[0].Open();
@@ -82,6 +88,18 @@ internal static class WindowsInstallerPolicy
     internal static async Task DownloadAsync(HttpClient client, WindowsArtifact artifact, string destination, long maximumBytes, IProgress<SetupProgress>? progress, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
         if (!IsAllowedArtifact(artifact.Url)) throw new InvalidDataException("安装文件地址不可信。");
+        await DownloadCoreAsync(ct=>client.GetAsync(artifact.Url,HttpCompletionOption.ResponseHeadersRead,ct),artifact,destination,maximumBytes,progress,cancellationToken,timeout).ConfigureAwait(false);
+    }
+
+    internal static Task DownloadAsync(AiDesktopSetup.Core.Protocol.ProtocolHttpClients clients,PackageArtifact artifact,string destination,long maximumBytes,IProgress<SetupProgress>? progress,CancellationToken cancellationToken)
+    {
+        var url=AiDesktopSetup.Core.Protocol.SetupUrlValidator.Asset(artifact.Url);
+        if (artifact.Bytes is <= 0 || artifact.Bytes > maximumBytes || (artifact.Sha256!=null && !Regex.IsMatch(artifact.Sha256,@"\A[0-9a-f]{64}\z"))) throw new SetupException("Artifact size or digest is unsupported.");
+        return DownloadCoreAsync(ct=>clients.GetPackageAsync(artifact.Url,ct),new WindowsArtifact(new Uri(url),artifact.Bytes,artifact.Sha256,artifact.Version),destination,maximumBytes,progress,cancellationToken,null);
+    }
+
+    private static async Task DownloadCoreAsync(Func<CancellationToken,Task<HttpResponseMessage>> send,WindowsArtifact artifact,string destination,long maximumBytes,IProgress<SetupProgress>? progress,CancellationToken cancellationToken,TimeSpan? timeout)
+    {
         // ResponseHeadersRead ends HttpClient.Timeout at the headers; this deadline also covers every body read.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout ?? TimeSpan.FromMinutes(20));
@@ -90,7 +108,8 @@ internal static class WindowsInstallerPolicy
         try
         {
             progress?.Report(new("download", "正在连接下载源…", Source: DownloadProgressTracker.SourceLabel(artifact.Url)));
-            using var response = await client.GetAsync(artifact.Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            using var response = await send(cancellationToken).ConfigureAwait(false);
+            if ((int)response.StatusCode>=300 && (int)response.StatusCode<=399) throw new HttpRequestException("Artifact redirects are not allowed.");
             response.EnsureSuccessStatusCode();
             if (response.RequestMessage?.RequestUri != artifact.Url) throw new InvalidDataException("下载地址发生变化，已停止。");
             var length = response.Content.Headers.ContentLength;

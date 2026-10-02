@@ -6,6 +6,7 @@ using System.Runtime.Versioning;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
+using AiDesktopSetup.Core.Protocol;
 
 namespace AiDesktopSetup.Core;
 
@@ -24,29 +25,73 @@ public sealed class WindowsInstaller
         return DesktopShortcut.Create(result.Output.Trim(), Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory));
     }
 
-    /// <summary>Inspects registration for the original user; this method never elevates.</summary>
-    public async Task<InstallState> InspectAsync(CancellationToken cancellationToken = default)
+    /// <summary>Inspects only the original user's registration; never elevates.</summary>
+    public async Task<MachineState> InspectMachineAsync(CancellationToken cancellationToken=default)
     {
         EnsureWindows();
+        var architecture=RuntimeCompat.OsArchitecture switch { Architecture.X64=>"x64",Architecture.Arm64=>"arm64",_=>"unsupported" };
+        var sid=WindowsIdentity.GetCurrent().User?.Value ?? throw new SetupException("Cannot identify the current Windows user.");
+        const string query="$ErrorActionPreference='Stop'; Get-AppxPackage -Name 'OpenAI.Codex' | Where-Object { $_.Publisher -ceq 'CN=50BDFD77-8903-4850-9FFE-6E8522F64D5B' -and $_.PackageFamilyName -ceq 'OpenAI.Codex_2p2nqsd0c76g0' -and $_.Status -eq 'Ok' } | Sort-Object { [version]$_.Version } -Descending | Select-Object -First 1 | ForEach-Object { $_.Name; $_.Publisher; $_.PackageFamilyName; $_.Version.ToString(); $_.Architecture.ToString().ToLowerInvariant() }";
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);deadline.CancelAfter(TimeSpan.FromSeconds(60));
+        var result=await RunSystemProcessAsync(PowerShellPath(),["-NoLogo","-NoProfile","-NonInteractive","-Command",query],deadline.Token).ConfigureAwait(false);
+        if (result.ExitCode!=0) throw new SetupException("Cannot inspect the current user's package registration.");
+        var fields=result.Output.Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries);
+        InstalledPackage? installed=null;
+        if (fields.Length==5 && CodexOfficialPolicy.TryVersion(fields[3],out var version)) installed=new(fields[0],fields[1],fields[2],version,fields[4],true);
+        else if(fields.Length!=0) throw new SetupException("Package inspection returned an invalid result.");
+        return new(true,Environment.OSVersion.Version,architecture,RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant(),sid,installed);
+    }
+    public async Task<InstallState> InspectAsync(CancellationToken cancellationToken=default)
+    {
         SetupDiagnostics.Current.Record(SetupEvent.InspectStarted);
-        // Fixed, read-only query. No user text, token, profile path, or downloaded script enters PowerShell.
-        const string query = "$ErrorActionPreference='Stop'; Get-AppxPackage -Name 'OpenAI.Codex' | Where-Object { $_.Publisher -ceq 'CN=50BDFD77-8903-4850-9FFE-6E8522F64D5B' -and $_.Status -eq 'Ok' } | Select-Object -First 1 | ForEach-Object { 'installed' }";
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(60));
-        ProcessResult result;
-        try { result = await RunSystemProcessAsync(PowerShellPath(), ["-NoLogo","-NoProfile","-NonInteractive","-Command",query], deadline.Token).ConfigureAwait(false); }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { throw new SetupException("检查 ChatGPT 桌面版安装状态超时。请检查 Windows 应用安装服务后重试。"); }
-        if (result.ExitCode != 0) throw new SetupException("无法检查 ChatGPT 桌面版安装状态。请检查 Windows 应用安装服务或联系管理员。");
-        return new(result.Output.Split('\n').Any(line => line.Trim() == "installed"));
+        var machine=await InspectMachineAsync(cancellationToken).ConfigureAwait(false);
+        if(machine.OsArchitecture is not ("x64" or "arm64")) return new(false);
+        var policy=CodexOfficialPolicy.ForArchitecture(machine.OsArchitecture);
+        return new(CodexOfficialPolicy.Matches(machine.InstalledPackage,policy) && machine.InstalledPackage!.Version>=policy.MinimumVersion);
+    }
+    /// <summary>Registration runs in this user process, including after another administrator supplies UAC credentials.</summary>
+    public async Task<InstallState> RegisterAsync(CancellationToken cancellationToken=default)
+    {
+        EnsureWindows();
+        const string command="$ErrorActionPreference='Stop'; Add-AppxPackage -RegisterByFamilyName -MainPackage 'OpenAI.Codex_2p2nqsd0c76g0'";
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);deadline.CancelAfter(TimeSpan.FromMinutes(2));
+        var result=await RunSystemProcessAsync(PowerShellPath(),["-NoLogo","-NoProfile","-NonInteractive","-Command",command],deadline.Token).ConfigureAwait(false);
+        var registered=await InspectAsync(cancellationToken).ConfigureAwait(false);
+        return registered.Installed ? registered : new(false,NeedsSignOut:result.ExitCode!=0 || !registered.Installed);
     }
 
     /// <summary>Elevates only the same executable's credential-free --install GUID entry point.</summary>
     public async Task<InstallState> InstallAsync(IProgress<SetupProgress>? progress, CancellationToken cancellationToken = default)
     {
         EnsureWindows();
+        var machine=await InspectMachineAsync(cancellationToken).ConfigureAwait(false);
+        return await InstallAsync(CodexOfficialPolicy.Official(CodexOfficialPolicy.ForArchitecture(machine.OsArchitecture)),progress,cancellationToken).ConfigureAwait(false);
+    }
+    public async Task<InstallState> InstallAsync(InstallationPlan plan,IProgress<SetupProgress>? progress,CancellationToken cancellationToken=default)
+    {
+        EnsureWindows();
+        var machine=await InspectMachineAsync(cancellationToken).ConfigureAwait(false);
+        if(plan.Action==InstallationAction.Unsupported || plan.Policy.Architecture!=machine.OsArchitecture) throw new SetupException("This Windows machine is unsupported.");
+        if(plan.Action==InstallationAction.Register) return await RegisterAsync(cancellationToken).ConfigureAwait(false);
         progress?.Report(new("inspect", "正在检查 ChatGPT 桌面版 安装状态…"));
         var existing = await InspectAsync(cancellationToken).ConfigureAwait(false);
-        if (existing.Installed) { SetupDiagnostics.Current.Record(SetupEvent.AlreadyInstalled); return existing; }
+        if (existing.Installed && (plan.Package?.Version==null || machine.InstalledPackage!.Version>=Version.Parse(plan.Package.Version))) { SetupDiagnostics.Current.Record(SetupEvent.AlreadyInstalled); return existing; }
+        if(plan.Action==InstallationAction.Skip) throw new SetupException("Package registration changed; inspect and resolve the installation plan again.");
+        var downloadDirectory=WindowsInstallPipe.CreateDownloadDirectory();
+        try
+        {
+            using var clients=new ProtocolHttpClients();
+            using var prepared=await new PackageTrustVerifier().PrepareAsync(clients,plan,machine,downloadDirectory,progress,cancellationToken).ConfigureAwait(false);
+            return await InstallPreparedAsync(prepared,progress,cancellationToken).ConfigureAwait(false);
+        }
+        finally { try { Directory.Delete(downloadDirectory,true); } catch(IOException) {} catch(UnauthorizedAccessException) {} }
+    }
+    /// <summary>Original user retains PreparedInstallation locks until the helper exits.</summary>
+    public async Task<InstallState> InstallPreparedAsync(PreparedInstallation prepared,IProgress<SetupProgress>? progress,CancellationToken cancellationToken=default)
+    {
+        EnsureWindows();
+        if (WindowsIdentity.GetCurrent().User?.Value!=prepared.OriginalUserSid) throw new SetupException("Installation must remain in the original user session.");
+        var requestWire=prepared.CreateHelperRequest().ToWire();
         SetupDiagnostics.Current.Record(SetupEvent.InstallStarted);
         cancellationToken.ThrowIfCancellationRequested();
         var executable = RuntimeCompat.ProcessPath;
@@ -80,6 +125,7 @@ public sealed class WindowsInstaller
                 catch (OperationCanceledException) { throw new SetupException("安装进程未能连接。请关闭工具后重试。"); }
                 using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, true);
                 using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 1024, true) { AutoFlush = true, NewLine = "\n" };
+                await writer.WriteLineAsync(requestWire).ConfigureAwait(false);
                 // After elevation cancellation is a request, not a claim that deployment was rolled back.
                 var cancellationSent = false;
                 using var registration = cancellationToken.Register(() =>
@@ -112,7 +158,7 @@ public sealed class WindowsInstaller
                 if (terminal?.Type != "success" || helper.ExitCode != 0)
                     throw new SetupException(terminal?.Error ?? "Windows 未能确认安装成功，账户配置尚未开始。请重试或联系管理员。");
                 // Query in the original user identity, including when UAC used a different administrator.
-                var registered = await InspectAsync(CancellationToken.None).ConfigureAwait(false);
+                var registered = await RegisterAsync(CancellationToken.None).ConfigureAwait(false);
                 SetupDiagnostics.Current.Record(registered.Installed ? SetupEvent.Registered : SetupEvent.SignOutRequired);
                 if (terminal.NeedsRestart) SetupDiagnostics.Current.Record(SetupEvent.RestartRequired);
                 return new(true, !registered.Installed, terminal.NeedsRestart);
@@ -138,6 +184,13 @@ public sealed class WindowsInstaller
         using var pipe = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous, TokenImpersonationLevel.Anonymous);
         try { await pipe.ConnectAsync(30000, cancellationToken).ConfigureAwait(false); }
         catch (Exception error) when (error is TimeoutException or IOException or OperationCanceledException) { return 1; }
+        InstallHelperRequest request;
+        using(var requestTimeout=CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            requestTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+            try { request=await InstallChannel.ReadRequestAsync(pipe,requestTimeout.Token).ConfigureAwait(false); }
+            catch(Exception error) when(error is SetupException or IOException or OperationCanceledException) { return 1; }
+        }
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var deploying = 0;
         var cancellationGate = new object();
@@ -147,19 +200,11 @@ public sealed class WindowsInstaller
         try
         {
             directory = WindowsInstallPipe.CreatePrivateDirectory();
-            using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseDefaultCredentials = false, MaxConnectionsPerServer = 3 }) { Timeout = TimeSpan.FromMinutes(20) };
-            var architecture = RuntimeCompat.OsArchitecture switch
-            {
-                Architecture.X64 => "x64", Architecture.Arm64 => "arm64", _ => throw new SetupException("此工具仅支持 x64 或 ARM64 Windows。"),
-            };
-            var sources = WindowsInstallerPolicy.ResolveSources(architecture);
-            var packagePath = Path.Combine(directory,"ChatGPT.msix");
-            var licensePath = Path.Combine(directory,"ChatGPT-License.xml");
-            await WindowsInstallerPolicy.DownloadAsync(client, sources.Package, packagePath, WindowsInstallerPolicy.MaximumPackageBytes, progress, cancellation.Token).ConfigureAwait(false);
-            await WindowsInstallerPolicy.DownloadAsync(client, sources.License, licensePath, WindowsInstallerPolicy.MaximumLicenseBytes, progress, cancellation.Token).ConfigureAwait(false);
-            progress.Report(new("verify", "正在核对官方安装包身份…"));
-            cancellation.Token.ThrowIfCancellationRequested();
-            var package = WindowsInstallerPolicy.ValidatePackage(packagePath, architecture, Environment.OSVersion.Version, sources.Package.Version);
+            var machine=await InspectHelperMachineAsync(cancellation.Token).ConfigureAwait(false);
+            progress.Report(new("verify", "正在验证受保护的官方安装包…"));
+            using var prepared=await new PackageTrustVerifier().PrepareHelperCopyAsync(request,machine,directory,cancellation.Token).ConfigureAwait(false);
+            var package=new WindowsPackageIdentity(prepared.Package.Version.ToString(),prepared.Package.Architecture);
+            var packagePath=prepared.Package.Path;var licensePath=prepared.LicensePath;
             // Once Windows servicing begins, do not kill DISM or pretend cancellation undid its changes.
             lock(cancellationGate) { cancellation.Token.ThrowIfCancellationRequested(); deploying = 1; }
             progress.Report(new("deploy", "正在安装 ChatGPT 桌面版。请保持窗口打开，Windows 会验证签名与许可证。"));
@@ -181,7 +226,7 @@ public sealed class WindowsInstaller
             progress.TrySend(new("diagnostic", Event: SetupEvent.HelperException, Code: error.HResult));
             var message = error switch
             {
-                SetupException => error.Message,
+                SetupException or PackageTrustException => error.Message,
                 InvalidDataException => "安装文件的大小、哈希、身份或系统版本校验失败。请重新下载或联系支持。",
                 HttpRequestException or OperationCanceledException => "安装文件下载失败或超时。请检查网络或代理后重试。",
                 _ => "安装未完成。请检查磁盘空间、Windows 更新和组织策略后重试。",
@@ -194,6 +239,21 @@ public sealed class WindowsInstaller
             // This directory contains only official installation artifacts, never credentials.
             if (directory is not null) { try { Directory.Delete(directory,true); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
         }
+    }
+
+    private static async Task<MachineState> InspectHelperMachineAsync(CancellationToken token)
+    {
+        var arch=RuntimeCompat.OsArchitecture switch { Architecture.X64=>"x64",Architecture.Arm64=>"arm64",_=>throw new SetupException("Unsupported Windows architecture.") };
+        const string query="$ErrorActionPreference='Stop'; Get-AppxPackage -AllUsers -Name 'OpenAI.Codex' | Where-Object { $_.Publisher -ceq 'CN=50BDFD77-8903-4850-9FFE-6E8522F64D5B' -and $_.PackageFamilyName -ceq 'OpenAI.Codex_2p2nqsd0c76g0' -and $_.Status -eq 'Ok' } | ForEach-Object { $_.Version.ToString() }; Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -ceq 'OpenAI.Codex' -and $_.PackageName -match '__2p2nqsd0c76g0$' } | ForEach-Object { $_.Version.ToString() }";
+        using var deadline=CancellationTokenSource.CreateLinkedTokenSource(token);deadline.CancelAfter(TimeSpan.FromMinutes(2));
+        var result=await RunSystemProcessAsync(PowerShellPath(),["-NoLogo","-NoProfile","-NonInteractive","-Command",query],deadline.Token).ConfigureAwait(false);
+        if(result.ExitCode!=0) throw new SetupException("Cannot inspect machine package versions before deployment.");
+        Version? newest=null;
+        foreach(var value in result.Output.Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries))
+        { if(!CodexOfficialPolicy.TryVersion(value,out var version)) throw new SetupException("Invalid machine package version.");if(newest==null || version>newest) newest=version; }
+        var policy=CodexOfficialPolicy.ForArchitecture(arch);
+        InstalledPackage? installed=newest==null?null:new(policy.IdentityName,policy.Publisher,policy.FamilyName,newest,arch,false);
+        return new(true,Environment.OSVersion.Version,arch,RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant(),WindowsIdentity.GetCurrent().User?.Value??"",installed);
     }
 
     private static async Task<ProcessResult> RunSystemProcessAsync(string executable, string[] arguments, CancellationToken cancellationToken)

@@ -7,7 +7,45 @@ using Microsoft.Win32.SafeHandles;
 
 namespace AiDesktopSetup.Core;
 
-/// <summary>The pipe transports progress and one fixed cancellation signal, never credentials or installation parameters.</summary>
+public enum InstallationOperation { Provision }
+/// <summary>Untrusted credential-free IPC. The helper independently reconstructs policy and verifies the protected copy.</summary>
+public sealed record InstallHelperRequest(string PackagePath,string? LicensePath,string PackageSha256,string? LicenseSha256,string AppId,InstallationOperation Operation)
+{
+    internal void Validate()
+    {
+        static bool Digest(string? value)=>value!=null && System.Text.RegularExpressions.Regex.IsMatch(value,@"\A[0-9a-f]{64}\z");
+        static bool LocalPath(string? value)=>value!=null && value.Length>=3 && value.Length<=4096 && value.IndexOf('\0')<0 && System.IO.Path.IsPathRooted(value)
+            && !value.StartsWith(@"\\",StringComparison.Ordinal) && !value.StartsWith("//",StringComparison.Ordinal)
+            && value.IndexOf(':',2)<0 && (!RuntimeCompat.IsWindows || (value[1]==':' && (value[2]=='\\' || value[2]=='/')));
+        if (AppId!="codex-desktop" || Operation!=InstallationOperation.Provision || !LocalPath(PackagePath) || !LocalPath(LicensePath)
+            || !Digest(PackageSha256) || !Digest(LicenseSha256) || PackagePath==LicensePath) throw new SetupException("Invalid installation request.");
+    }
+    public string ToWire()
+    {
+        Validate();var wire=System.Text.Json.JsonSerializer.Serialize(this);
+        if(System.Text.Encoding.UTF8.GetByteCount(wire)>16384) throw new SetupException("Installation request exceeds its limit.");
+        return wire;
+    }
+    internal static InstallHelperRequest Parse(byte[] bytes)
+    {
+        try
+        {
+            using var doc=System.Text.Json.JsonDocument.Parse(bytes);
+            var names=new HashSet<string>(StringComparer.Ordinal);
+            var allowed=new[]{"PackagePath","LicensePath","PackageSha256","LicenseSha256","AppId","Operation"};
+            foreach (var p in doc.RootElement.EnumerateObject())
+                if (!allowed.Contains(p.Name,StringComparer.Ordinal) || !names.Add(p.Name)) throw new SetupException("Invalid installation request.");
+            if (names.Count!=allowed.Length) throw new SetupException("Invalid installation request.");
+            var request=System.Text.Json.JsonSerializer.Deserialize<InstallHelperRequest>(bytes) ?? throw new SetupException("Invalid installation request.");
+            request.Validate();return request;
+        }
+        catch (Exception error) when (error is System.Text.Json.JsonException or InvalidOperationException or ArgumentException) { throw new SetupException("Invalid installation request."); }
+    }
+    public override string ToString()=>"[installation artifacts]";
+}
+
+
+/// <summary>The pipe transports one bounded artifact request, progress, and cancellation; never credentials or remote commands.</summary>
 [SupportedOSPlatform("windows")]
 internal static class WindowsInstallPipe
 {
@@ -32,6 +70,18 @@ internal static class WindowsInstallPipe
 
     internal static bool IsExpectedClient(NamedPipeServerStream pipe, int processId) =>
         GetNamedPipeClientProcessId(pipe.SafePipeHandle, out var actual) && actual == (uint)processId;
+
+    internal static string CreateDownloadDirectory()
+    {
+        var sid=WindowsIdentity.GetCurrent().User?.Value ?? throw new SetupException("Cannot identify the Windows user.");
+        var path=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"AiDesktopSetupPackages."+Guid.NewGuid().ToString("N"));
+        AiDesktopSetup.Core.Recovery.ResumeFileSecurity.CheckAncestors(Path.GetDirectoryName(path)!);
+        // Package bytes only: alternate UAC administrators can read, but cannot replace the user's staging files.
+        using var security=new SecurityDescriptor($"D:P(A;OICI;FA;;;{sid})(A;OICI;FRFX;;;BA)(A;OICI;FRFX;;;SY)");
+        var attributes=security.Attributes;
+        if(!CreateDirectoryW(path,ref attributes)) throw new Win32Exception(Marshal.GetLastWin32Error());
+        return path;
+    }
 
     internal static string CreatePrivateDirectory()
     {

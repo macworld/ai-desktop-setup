@@ -20,8 +20,10 @@ hashes and unsigned status. Artifacts are not automatically uploaded or publishe
 The UI is an intentionally incomplete shell. The baseline retains local config/auth
 backup and rollback, private-file safeguards, conservative TOML merging, complete-file
 download limits, official-package metadata checks, protected helper IPC and Windows
-servicing receipt checks. Authenticated discovery, recovery storage, stronger package
-trust checks and end-to-end user workflow remain to be implemented. Native Windows
+servicing receipt checks. Core provides authenticated discovery, recovery storage,
+configuration transactions, and independent official package trust boundaries;
+the end-to-end user workflow remains to be implemented. See the
+[Codex adapter policy and native gates](docs/codex-adapter.md). Native Windows
 runtime, ACL, UAC, WPF and package-install acceptance is required before release;
 cross-compilation alone does not establish those behaviors.
 

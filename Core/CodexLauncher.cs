@@ -3,11 +3,15 @@ using System.Runtime.Versioning;
 
 namespace AiDesktopSetup.Core;
 
-[SupportedOSPlatform("windows")]
 public static class CodexLauncher
 {
-    public static void Open()
+    [SupportedOSPlatform("windows")]
+    public static void Open() => Open(new WindowsInstaller().InspectMachineAsync().GetAwaiter().GetResult());
+    [SupportedOSPlatform("windows")]
+    public static void Open(MachineState machine)
     {
+        ValidateRegisteredMachine(machine);
+        if(System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value!=machine.CurrentUserSid) throw new SetupException("Launch must remain in the original user session.");
         var classId = new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C");
         var interfaceId = typeof(IApplicationActivationManager).GUID;
         // The assistant exits immediately after activation. An out-of-process manager
@@ -18,6 +22,14 @@ public static class CodexLauncher
             Marshal.ThrowExceptionForHR(manager.ActivateApplication("OpenAI.Codex_2p2nqsd0c76g0!App", null, 2 /* AO_NOERRORUI */, out _));
         }
         finally { Marshal.FinalReleaseComObject(manager); }
+    }
+
+    internal static void ValidateRegisteredMachine(MachineState machine)
+    {
+        if (!machine.IsWindows || machine.OsArchitecture is not ("x64" or "arm64")) throw new SetupException("This machine is unsupported.");
+        var policy=CodexOfficialPolicy.ForArchitecture(machine.OsArchitecture);
+        if (!CodexOfficialPolicy.Matches(machine.InstalledPackage,policy) || !machine.InstalledPackage!.RegisteredForCurrentUser || machine.InstalledPackage.Version<policy.MinimumVersion)
+            throw new SetupException("The official package must be registered for the current user before launch.");
     }
 
     [DllImport("ole32.dll")]
