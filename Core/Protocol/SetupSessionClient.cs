@@ -126,6 +126,7 @@ public sealed class SetupSessionClient
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested) { failure = new(new("temporarily_unavailable", "")); }
             catch (HttpRequestException) { failure = new(new("temporarily_unavailable", "")); }
+            catch (IOException) { ct.ThrowIfCancellationRequested(); failure = new(new("temporarily_unavailable", "")); }
             var wait = failure!.RetryAfter ?? TimeSpan.FromSeconds(attempt + 1);
             // Longer throttles belong to the UI. Never sleep past the fixed session deadline.
             if (attempt == 2 || wait > TimeSpan.FromSeconds(2) || (deadline.HasValue && clock.UtcNow + wait >= deadline.Value)) throw failure;

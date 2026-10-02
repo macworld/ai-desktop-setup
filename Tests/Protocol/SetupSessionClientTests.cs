@@ -251,6 +251,85 @@ public sealed class SetupSessionClientTests
         var json=ProtocolFixtures.SessionJson();json["revision"]="changed";
         await Assert.ThrowsAsync<ProtocolException>(()=>Client(_=>Response(Encoding.UTF8.GetBytes(json.ToJsonString()))).GetSessionAsync(Access(),default));
     }
+    [Theory] [InlineData(200)] [InlineData(503)]
+    public async Task BodyStreamFailureUsesBoundedNeutralRetries(int status)
+    {
+        var attempts = 0; var failures = 0; var delays = new List<TimeSpan>();
+        var client = Client(request => {
+            attempts++; Assert.Equal(Proof.ToBearer(),request.Headers.Authorization!.Parameter);
+            var response = Response([],status:status); response.Content = new FailingReadContent(() => failures++); return response;
+        },delays:delays);
+        var error = await Assert.ThrowsAsync<ProtocolHttpException>(() => client.GetSessionAsync(Access(),default));
+        Assert.Equal("temporarily_unavailable",error.Error.Code); Assert.Equal("",error.Error.RequestId);
+        Assert.Null(error.InnerException); Assert.DoesNotContain("FAKE_remote_transport_message",error.ToString());
+        Assert.Equal(3,attempts); Assert.Equal(3,failures);
+        Assert.Equal(new[] {TimeSpan.FromSeconds(1),TimeSpan.FromSeconds(2)},delays);
+    }
+    [Theory] [InlineData(200)] [InlineData(503)]
+    public async Task BodyStreamFailureCanRecoverOnNextAttempt(int status)
+    {
+        var attempts = 0; var delays = new List<TimeSpan>();
+        var client = Client(_ => {
+            attempts++;
+            if (attempts > 1) return Response(ProtocolFixtures.Wire(ProtocolFixtures.Session().ToWire()));
+            var response = Response([],status:status); response.Content = new FailingReadContent(() => { }); return response;
+        },delays:delays);
+        var session = await client.GetSessionAsync(Access(),default);
+        Assert.Equal("ins_example",session.SessionId); Assert.Equal(2,attempts); Assert.Equal(new[] {TimeSpan.FromSeconds(1)},delays);
+    }
+    [Theory] [InlineData(200)] [InlineData(503)]
+    public async Task BodyStreamFailureNeverRetriesAcrossDeadline(int status)
+    {
+        var attempts = 0; var delays = new List<TimeSpan>();
+        var clock = new FixedClock { UtcNow = new(2030,1,1,1,59,59,TimeSpan.Zero) };
+        var client = Client(_ => {
+            attempts++; var response = Response([],status:status); response.Content = new FailingReadContent(() => { }); return response;
+        },clock:clock,delays:delays);
+        var error = await Assert.ThrowsAsync<ProtocolHttpException>(() => client.GetSessionAsync(Access(),default));
+        Assert.Equal("temporarily_unavailable",error.Error.Code); Assert.Equal(1,attempts); Assert.Empty(delays);
+        Assert.Null(error.InnerException); Assert.DoesNotContain("FAKE_remote_transport_message",error.ToString());
+    }
+    [Theory] [InlineData(200)] [InlineData(503)] [InlineData(401)] [InlineData(403)]
+    public async Task BodyStreamCallerCancellationIsPreserved(int status)
+    {
+        using var cancel = new CancellationTokenSource(); var attempts = 0; var delays = new List<TimeSpan>();
+        var client = Client(_ => {
+            attempts++; var response = Response([],status:status);
+            response.Content = new FailingReadContent(() => cancel.Cancel(),cancelRead:true); return response;
+        },delays:delays);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetSessionAsync(Access(),cancel.Token));
+        Assert.Equal(1,attempts); Assert.Empty(delays);
+    }
+    [Theory] [InlineData(401,"invalid_credential")] [InlineData(403,"access_denied")]
+    public async Task BodyStreamAuthorizationFailureRemainsTerminal(int status,string code)
+    {
+        var attempts = 0; var failures = 0; var delays = new List<TimeSpan>();
+        var client = Client(_ => {
+            attempts++; var response = Response([],status:status); response.Content = new FailingReadContent(() => failures++); return response;
+        },delays:delays);
+        var error = await Assert.ThrowsAsync<ProtocolHttpException>(() => client.GetSessionAsync(Access(),default));
+        Assert.Equal(code,error.Error.Code); Assert.Equal(1,attempts); Assert.Equal(1,failures); Assert.Empty(delays);
+        Assert.Null(error.InnerException); Assert.DoesNotContain("FAKE_remote_transport_message",error.ToString());
+    }
+    // Bypass buffering so the production boundary encounters a real ReadAsync failure after a partial body.
+    private sealed class FailingReadContent(Action onFailure,bool cancelRead = false) : HttpContent
+    {
+        protected override Task<Stream> CreateContentReadStreamAsync() => Task.FromResult<Stream>(new FailingReadStream(onFailure,cancelRead));
+        protected override Task SerializeToStreamAsync(Stream stream,TransportContext? context) => throw new NotSupportedException("The regression must use response streaming.");
+        protected override bool TryComputeLength(out long length) { length = 0; return false; }
+    }
+    private sealed class FailingReadStream(Action onFailure,bool cancelRead) : MemoryStream
+    {
+        private bool returnedPrefix;
+        public override Task<int> ReadAsync(byte[] buffer,int offset,int count,CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!returnedPrefix) { returnedPrefix = true; buffer[offset] = (byte)'{'; return Task.FromResult(1); }
+            onFailure();
+            if (cancelRead) ct.ThrowIfCancellationRequested();
+            return Task.FromException<int>(new IOException("FAKE_remote_transport_message"));
+        }
+    }
     private static byte[] Pad(byte[] bytes, int length) { var b = Enumerable.Repeat((byte)32, length).ToArray(); Buffer.BlockCopy(bytes,0,b,0,bytes.Length); return b; }
     private static byte[] Png(int width, int height) { var b = new byte[33]; new byte[] {137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82}.CopyTo(b,0); for (var i=0;i<4;i++) {b[16+i]=(byte)(width>>(24-8*i)); b[20+i]=(byte)(height>>(24-8*i));} return b; }
     private sealed class Handler(Func<HttpRequestMessage,HttpResponseMessage> send) : HttpMessageHandler
