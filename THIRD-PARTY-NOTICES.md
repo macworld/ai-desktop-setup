@@ -11,7 +11,9 @@ whose installed package metadata identifies MIT licensing: System.Text.Json 10.0
 System.Text.Encodings.Web 10.0.12, System.IO.Pipelines 10.0.12,
 Microsoft.Bcl.AsyncInterfaces 10.0.12, System.Buffers 4.6.1, System.Memory 4.6.3,
 System.Numerics.Vectors 4.6.1, System.Runtime.CompilerServices.Unsafe 6.1.2,
-System.Threading.Tasks.Extensions 4.6.3 and System.ValueTuple 4.6.2.
+System.Threading.Tasks.Extensions 4.6.3 and System.ValueTuple 4.6.2. ValueTuple resolves to a framework placeholder and is
+not redistributed as a DLL. The nine actual DLLs and hashes are recorded in
+`build/runtime-inventory.json`.
 
 Copyright (c) .NET Foundation and Contributors. Some packages also retain
 Microsoft Corporation copyright notices. See the authoritative package LICENSE.TXT
@@ -41,7 +43,7 @@ redistributing test tooling. No test tooling is embedded in the installer.
 
 ## NSIS and official packages
 
-NSIS 3.12+ is an external packaging tool. Its wrapper runtime, standard includes and
+NSIS 3.12 is an external packaging tool. Its wrapper runtime, standard includes and
 plugins keep their original licenses; see the
 [NSIS license documentation](https://nsis.sourceforge.io/License) and the selected
 NSIS distribution's COPYING/Docs licenses. The compiler and plugins are not
@@ -71,3 +73,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Exact upstream license texts and source-access instructions are retained in
+`licenses/dotnet/` and `licenses/NSIS/` and copied into both payloads.

@@ -6,6 +6,7 @@
     <OutputType Condition="'$(TargetFramework)' == 'net10.0'">Exe</OutputType>
     <StartupObject Condition="'$(TargetFramework)' == 'net10.0'">AiDesktopSetup.Tests.ConfigurationCrashProcess</StartupObject>
     <IsTestProject>true</IsTestProject>
+    <UseAppHost Condition="'$(TargetFramework)' == 'net10.0'">false</UseAppHost>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />

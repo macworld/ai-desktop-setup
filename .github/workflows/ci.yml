@@ -1,0 +1,50 @@
+name: Unsigned candidate CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: source
+          submodules: false
+          lfs: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.401'
+          global-json-file: source/global.json
+          architecture: x64
+          cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12.10'
+          architecture: x64
+          check-latest: false
+          allow-prereleases: false
+          freethreaded: false
+      - name: Test, cross-compile and package exact commit
+        shell: pwsh
+        env:
+          TESTED_COMMIT: ${{ github.sha }}
+        run: |
+          $source = Join-Path $env:GITHUB_WORKSPACE 'source'
+          $actual = (git -C $source rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:TESTED_COMMIT) { throw 'Checkout identity mismatch' }
+          & "$source/build/build.ps1" -SourceRepository $source -SourceCommit $actual
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unsigned-preview-${{ github.run_id }}-${{ github.run_attempt }}
+          path: C:\build\ai-desktop-setup\cohort
+          include-hidden-files: true
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 14

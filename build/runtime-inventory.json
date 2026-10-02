@@ -1,0 +1,65 @@
+{
+  "Microsoft.Bcl.AsyncInterfaces.dll": {
+    "package": "Microsoft.Bcl.AsyncInterfaces",
+    "version": "10.0.12",
+    "sha256": "1009baea2f1a87f37530a1eecedbe1e7f42227df8ca9775799bf403cee022325",
+    "license": "MIT",
+    "notice_required": true
+  },
+  "System.IO.Pipelines.dll": {
+    "package": "System.IO.Pipelines",
+    "version": "10.0.12",
+    "sha256": "eb4d58a1769115fe6452437fa0e5e0bc22e140366d67e688b81d1dc8f61ec74a",
+    "license": "MIT",
+    "notice_required": true
+  },
+  "System.Text.Encodings.Web.dll": {
+    "package": "System.Text.Encodings.Web",
+    "version": "10.0.12",
+    "sha256": "2ca6caee74e5e7c3714ed8284970813befaba446fc82e17d9d07397eed8d93d7",
+    "license": "MIT",
+    "notice_required": true
+  },
+  "System.Text.Json.dll": {
+    "package": "System.Text.Json",
+    "version": "10.0.12",
+    "sha256": "8bc0e77a67553d9b16eee8981365f1b13d9de714a540cef1051daf0d1a392eba",
+    "license": "MIT",
+    "notice_required": true
+  },
+  "System.Buffers.dll": {
+    "package": "System.Buffers",
+    "version": "4.6.1",
+    "sha256": "2d78d770c9cb997199154ae8c018b9f1d1efbc86729f7264dde6dbad2a12cac3",
+    "license": "MIT",
+    "notice_required": false
+  },
+  "System.Numerics.Vectors.dll": {
+    "package": "System.Numerics.Vectors",
+    "version": "4.6.1",
+    "sha256": "20c2fa81b8c70d651099d762954f285fd4f942e63b2d7217c145dab8d4b2f4c9",
+    "license": "MIT",
+    "notice_required": false
+  },
+  "System.Memory.dll": {
+    "package": "System.Memory",
+    "version": "4.6.3",
+    "sha256": "d5e8e4866f9cfa66f7765660f84b210198893e55335487afe5ebda342c0e913d",
+    "license": "MIT",
+    "notice_required": false
+  },
+  "System.Runtime.CompilerServices.Unsafe.dll": {
+    "package": "System.Runtime.CompilerServices.Unsafe",
+    "version": "6.1.2",
+    "sha256": "08cbd7278b66f1e68425a82d4b97181a4130d93e3dd91831407aba7212ccdacf",
+    "license": "MIT",
+    "notice_required": false
+  },
+  "System.Threading.Tasks.Extensions.dll": {
+    "package": "System.Threading.Tasks.Extensions",
+    "version": "4.6.3",
+    "sha256": "af4e13ef418fd89b432de20cd1dfb7fa10a7179c8dd049c9856316e50c5949ca",
+    "license": "MIT",
+    "notice_required": false
+  }
+}

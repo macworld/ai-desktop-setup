@@ -8,6 +8,7 @@
     <DefineConstants Condition="'$(Platform)' == 'x64'">$(DefineConstants);NATIVE_X64</DefineConstants>
     <DefineConstants Condition="'$(Platform)' == 'ARM64'">$(DefineConstants);NATIVE_ARM64</DefineConstants>
     <Prefer32Bit>false</Prefer32Bit>
+    <NuGetLockFilePath>packages.$(Platform).lock.json</NuGetLockFilePath>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <IsTestProject>true</IsTestProject><IsPackable>false</IsPackable>
     <UseWPF>true</UseWPF><EnableWindowsTargeting>true</EnableWindowsTargeting>

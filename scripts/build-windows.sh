@@ -2,6 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+export PYTHONDONTWRITEBYTECODE=1
 dotnet_bin="${AI_SETUP_DOTNET:-$(command -v dotnet || true)}"
 if [[ ! -x "$dotnet_bin" ]]; then
   dotnet_bin="$(command -v dotnet || true)"
@@ -10,13 +12,13 @@ if [[ -z "$dotnet_bin" || ! -x "$dotnet_bin" ]]; then
   echo 'Install the .NET 10 SDK or set AI_SETUP_DOTNET to its dotnet executable.' >&2
   exit 1
 fi
-if [[ "$("$dotnet_bin" --version)" != 10.* ]]; then
-  echo 'This build requires .NET 10 SDK.' >&2
+if [[ "$("$dotnet_bin" --version)" != 10.0.401 ]]; then
+  echo 'This build requires .NET SDK 10.0.401.' >&2
   exit 1
 fi
 makensis_bin="${AI_SETUP_MAKENSIS:-$(command -v makensis || true)}"
 if [[ -z "$makensis_bin" || ! -x "$makensis_bin" ]]; then
-  echo 'Install NSIS 3.12+ (macOS: brew install makensis), or set AI_SETUP_MAKENSIS.' >&2
+  echo 'Install NSIS 3.12 (macOS: brew install makensis), or set AI_SETUP_MAKENSIS.' >&2
   exit 1
 fi
 export PATH="$(dirname "$dotnet_bin"):$PATH"

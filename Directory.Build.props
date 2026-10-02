@@ -4,6 +4,20 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreConfigFile>$(MSBuildThisFileDirectory)NuGet.Config</RestoreConfigFile>
+    <!-- Fresh candidate builds recompute these inputs; do not serialize optional caches. -->
+    <DisablePackageAssetsCache>true</DisablePackageAssetsCache>
+    <DisableRarCache>true</DisableRarCache>
+    <DisableMsCoverageReferencedPathMaps>true</DisableMsCoverageReferencedPathMaps>
+    <RestoreLockedMode Condition="'$(UpdatePackageLocks)' != 'true'">true</RestoreLockedMode>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <PathMap>$(MSBuildThisFileDirectory)=/_/src</PathMap>
   </PropertyGroup>
   <ItemGroup><Using Include="System.Net.Http" /></ItemGroup>
+  <Target Name="ValidateFreshBuildInputs" BeforeTargets="ResolveAssemblyReferences;ResolvePackageAssets">
+    <Error Condition="'$(DisablePackageAssetsCache)' != 'true' Or '$(DisableRarCache)' != 'true'" Text="Candidate builds must recompute optional caches in memory." />
+    <Error Condition="'$(ResolveAssemblyReferencesStateFile)' != '' Or '$(DesignTimeResolveAssemblyReferencesStateFile)' != '' Or '$(AssemblyInformationCacheOutputPath)' != '' Or '$(AssemblyInformationCachePaths)' != ''" Text="Explicit assembly-reference cache paths are not permitted in fresh candidates." />
+    <Error Condition="'$(DisableMsCoverageReferencedPathMaps)' != 'true'" Text="Uncollected test coverage must not generate a path-map sidecar." />
+  </Target>
 </Project>

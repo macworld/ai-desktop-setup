@@ -8,6 +8,7 @@
     <TargetFramework>net48</TargetFramework>
     <TargetFramework Condition="'$(PlatformTarget)' == 'ARM64'">net481</TargetFramework>
     <Prefer32Bit>false</Prefer32Bit>
+    <NuGetLockFilePath>packages.$(PlatformTarget).lock.json</NuGetLockFilePath>
     <UseWPF>true</UseWPF>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>AI.Desktop.Setup</AssemblyName>
