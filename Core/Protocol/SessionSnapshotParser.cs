@@ -3,9 +3,9 @@ using System.Text.Json;
 namespace AiDesktopSetup.Core.Protocol;
 internal static class SessionSnapshotParser
 {
-    internal static SessionSnapshot Parse(byte[] bytes)
+    internal static SessionSnapshot Parse(byte[] bytes, int maximumBytes = SessionSnapshot.MaximumNetworkBytes)
     {
-        var json = StrictJson.Object(StrictJson.Parse(bytes)); StrictJson.Version(json); StrictJson.App(json);
+        var json = StrictJson.Object(StrictJson.Parse(bytes, maximumBytes)); StrictJson.Version(json); StrictJson.App(json);
         var id = StrictJson.Identifier(json, "session_id"); var stateText = StrictJson.String(json, "state");
         var state = stateText switch { "claimed" => SessionState.Claimed, "credentials_released" => SessionState.CredentialsReleased, "completed" => SessionState.Completed, _ => throw new ProtocolException() };
         var expiryText = StrictJson.String(json, "expires_at"); var expiry = StrictJson.UtcTime(expiryText);

@@ -45,8 +45,8 @@ public sealed class SetupCodeTests
     public void StrictCanonicalizationPreservesPath(string input, string canonical) => Assert.Equal(canonical, SetupUrlValidator.Normalize(input, false));
     [Theory][InlineData("https://gateway.example/v1|x")][InlineData("https://gateway.example/v1<x>")]
     public void RejectsUriSilentCharacterRepair(string value) => Assert.Throws<ProtocolException>(() => SetupUrlValidator.Normalize(value, false));
-    [Theory][InlineData("https://gateway.example/v1?x=%GG")][InlineData("https://gateway.example/v1?%74oken=EXAMPLE_FAKE")]
-    public void RejectsMalformedAndCredentialBearingAssetUrls(string value) => Assert.Throws<ProtocolException>(() => SetupUrlValidator.Asset(value));
+    [Theory][InlineData("https://gateway.example/v1?x=%GG")]
+    public void RejectsMalformedAssetUrls(string value) => Assert.Throws<ProtocolException>(() => SetupUrlValidator.Asset(value));
     [Fact] public void StrictProofEncodingRejectsNoncanonicalTrailingBits()
     {
         var canonical = new ResumeSecret(new byte[32]).ToBearer(); Assert.Equal(32, ResumeSecret.Parse(canonical).Bytes.Length);
@@ -74,6 +74,15 @@ public sealed class SetupCodeTests
         json["credential"]!["value"] = fixture;
         json["setup_base_url"] = code.SetupBaseUrl + "/" + Uri.EscapeDataString(fixture);
         Assert.Throws<ProtocolException>(() => SetupCodeParser.Parse(Encode(json.ToJsonString())));
+    }
+    [Theory][InlineData("https://docs.example/help?key=keyboard-shortcuts")][InlineData("https://docs.example/help?%74oken=pagination-cursor")][InlineData("https://docs.example/help#proof=worked-example")]
+    public void AllowsNonSecretAssetQueryAndFragment(string value) => Assert.Equal(value,SetupUrlValidator.Asset(value));
+    [Fact] public void IPv6EquivalentOriginsSupportApiKey()
+    {
+        var urls = SetupUrlValidator.Validate("https://[2001:0db8:0000:0000:0000:0000:0000:0001]:443/Setup", "https://[2001:db8::1]/v1/", CredentialType.ApiKey);
+        Assert.Equal("https://[2001:db8::1]/Setup",urls.SetupBaseUrl);
+        Assert.Equal("https://[2001:db8::1]/v1/",urls.ApiBaseUrl);
+        Assert.Throws<ProtocolException>(() => SetupUrlValidator.Validate(urls.SetupBaseUrl,"https://[2001:db8::1]:8443/v1/",CredentialType.ApiKey));
     }
     internal static string Pad(string s) => s.Replace('-', '+').Replace('_', '/') + new string('=', (4 - s.Length % 4) % 4);
     internal static string Encode(string s) => "AGSP1." + Convert.ToBase64String(Encoding.UTF8.GetBytes(s)).TrimEnd('=').Replace('+', '-').Replace('/', '_');

@@ -69,6 +69,8 @@ v1 客户端适配范围为 Windows Codex、API Key 认证及 Responses API；
 - 禁止 URL 用户信息、query、fragment、反斜杠和控制字符。
 - 主机使用小写 ASCII/IDNA 形式，省略默认 443 端口；非默认端口明确保留。
   路径区分大小写，保留租户路径及 /v1；拒绝点路径段和编码后的路径分隔符。
+  方括号 IPv6 地址按小写十六进制 16 位组规范化，移除组内前导零；压缩至少两组的
+  最长连续零组，长度并列时选择第一段。IPv4 映射尾部也使用十六进制组；v1 拒绝 zone/scope 标识。
 - `setup_base_url` 必须没有结尾斜杠，完整接口由追加本规范规定的路径构成。
   不从 `api_base_url` 猜测它，也不再发起匿名 well-known 请求。
 - `api_base_url` 必须按服务端记录原样绑定；不能在客户端擅自增删 /v1 或结尾斜杠。
@@ -401,6 +403,12 @@ vectors. JSON Schema validates structure only; semantic and HTTP checks are mand
   Do not resolve dot paths, collapse slashes, append `/v1`, or repair URLs. The
   setup base must not end in `/`. Missing authority, invalid ports and URI syntax
   must reject. A URI parser's silent repairs are not canonicalization.
+  Bracketed IPv6 literals accept expanded or compressed input and canonicalize to
+  lowercase hexadecimal 16-bit groups without leading zeros. Compress the longest
+  consecutive zero run of at least two groups, choosing the first run on a tie.
+  IPv4-mapped tails also use hexadecimal groups, never a library-dependent dotted
+  representation. v1 rejects all zone/scope identifiers. Preserve paths and ports;
+  origin and binding comparisons use this canonical address representation.
   Asset/link URLs may carry non-secret query/fragment data, but never credentials;
   assets are downloaded only under the adapter's trust and redirect policy.
 - Compare normalized setup and API URLs with the saved binding. Origin means

@@ -52,6 +52,13 @@ public sealed class SessionBindingTests
         json["service"]!["help_url"] = "https://gateway.example/help?x=" + Uri.EscapeDataString(code.Credential.Value);
         Assert.Throws<ProtocolException>(() => ProtocolFixtures.Validator().Validate(code, ProtocolFixtures.Session(json), null));
     }
+    [Theory][InlineData("?key=keyboard-shortcuts")][InlineData("?token=pagination-cursor")][InlineData("#secret=word-game")]
+    public void AllowsNonSecretServiceLinkData(string suffix)
+    {
+        var json = ProtocolFixtures.SessionJson(); var url = "https://docs.example/help" + suffix;
+        json["service"]!["help_url"] = url;
+        Assert.Equal(url,ProtocolFixtures.Validator().Validate(ProtocolFixtures.Code(),ProtocolFixtures.Session(json),null).Snapshot.Service.HelpUrl);
+    }
     [Fact] public void StrictSessionDecoderRejectsInvalidUtf8AndOversize()
     {
         Assert.Throws<ProtocolException>(() => SessionSnapshot.Parse(new byte[] {0xff}));

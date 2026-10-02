@@ -52,6 +52,10 @@ public sealed record RemoteArtifact(string Url, long Bytes, string Sha256);
 public sealed record PackageMirror(string AppId, string Architecture, string Version, RemoteArtifact Package, RemoteArtifact? License);
 public sealed class SessionSnapshot
 {
+    public const int MaximumNetworkBytes = 131072;
+    // Default JSON escaping expands a one-byte character to at most six bytes.
+    // Account for normalized hosts and inserted optional-field defaults separately.
+    internal const int MaximumStoredBytes = MaximumNetworkBytes * 6 + 4096;
     public int Version => 1;
     public string SessionId { get; }
     public SessionState State { get; }
@@ -68,6 +72,7 @@ public sealed class SessionSnapshot
     internal SessionSnapshot(JsonElement wire, string id, SessionState state, DateTimeOffset expiry, string revision, ValidatedBaseUrls urls, ServiceInfo service, SelectionInfo selection, ClientConfiguration client, PackageMirror[] mirrors)
     { this.wire = wire; SessionId = id; State = state; ExpiresAt = expiry; Revision = revision; SetupBaseUrl = urls.SetupBaseUrl; ApiBaseUrl = urls.ApiBaseUrl; Service = service; Selection = selection; Client = client; Mirrors = Array.AsReadOnly(mirrors); }
     public static SessionSnapshot Parse(byte[] bytes) => SessionSnapshotParser.Parse(bytes);
+    internal static SessionSnapshot ParseStored(byte[] bytes) => SessionSnapshotParser.Parse(bytes, MaximumStoredBytes);
     public JsonElement ToWire() => wire.Clone();
 }
 public sealed class SessionAdapterPolicy

@@ -7,7 +7,8 @@ namespace AiDesktopSetup.Core.Recovery;
 /// Local records are recovery data, never authorization; every resumed stage requires server checks.</summary>
 public sealed class DpapiResumeStore : IResumeStore
 {
-    private const int MaximumRecordBytes = 196608;
+    private const int MaximumPlainRecordBytes = SessionSnapshot.MaximumStoredBytes + 16384 + 4096;
+    private const int MaximumProtectedRecordBytes = MaximumPlainRecordBytes + 4096;
     private readonly string root; private readonly IClock clock; private readonly IRandomSource random; private readonly IResumeProtection protection;
     public DpapiResumeStore(string root, IClock clock, IRandomSource random) : this(root, clock, random, new DpapiProtection())
     { if (!RuntimeCompat.IsWindows) throw new PlatformNotSupportedException("Resume protection requires Windows."); }
@@ -48,19 +49,19 @@ public sealed class DpapiResumeStore : IResumeStore
         byte[] encrypted;
         using (var stream = ResumeFileSecurity.OpenRead(path))
         {
-            if (stream.Length > MaximumRecordBytes) throw new IOException("Resume record is invalid.");
+            if (stream.Length > MaximumProtectedRecordBytes) throw new IOException("Resume record is invalid.");
             using var buffer = new MemoryStream(); stream.CopyTo(buffer); encrypted = buffer.ToArray();
         }
         byte[]? plain = null;
         try
         {
-            plain = protection.Unprotect(encrypted); var json = StrictJson.Object(StrictJson.Parse(plain, MaximumRecordBytes)); StrictJson.Version(json);
+            plain = protection.Unprotect(encrypted); var json = StrictJson.Object(StrictJson.Parse(plain, MaximumPlainRecordBytes)); StrictJson.Version(json);
             var code = SetupCodeParser.Parse(StrictJson.String(json, "code"));
             if (!Guid.TryParseExact(StrictJson.String(json, "claim_id"), "D", out var claimId)) throw new ProtocolException();
             if (StrictJson.String(json, "resume_id") != id.Value.ToString("D")) throw new ProtocolException();
             var claim = new ClaimRecord(id, claimId, ResumeSecret.Parse(StrictJson.String(json, "resume_secret")));
             if (!Enum.TryParse<LocalStage>(StrictJson.String(json, "local_stage"), out var stage) || !Enum.IsDefined(typeof(LocalStage), stage)) throw new ProtocolException();
-            var snapshot = json.TryGetProperty("snapshot", out var saved) ? SessionSnapshot.Parse(Encoding.UTF8.GetBytes(saved.GetRawText())) : null;
+            var snapshot = json.TryGetProperty("snapshot", out var saved) ? SessionSnapshot.ParseStored(Encoding.UTF8.GetBytes(saved.GetRawText())) : null;
             var record = new ResumeRecord(claim, code, StrictJson.UtcTime(StrictJson.String(json, "created_at")), StrictJson.UtcTime(StrictJson.String(json, "expires_at")), stage, snapshot);
             Validate(record, checkExpiry: false);
             if (clock.UtcNow >= record.ExpiresAt) { DeleteCore(id); return null; }
@@ -87,8 +88,13 @@ public sealed class DpapiResumeStore : IResumeStore
         var data = new Dictionary<string, object> { ["version"] = 1, ["resume_id"] = record.Claim.ResumeId.Value.ToString("D"), ["claim_id"] = record.Claim.ClaimId.ToString("D"), ["resume_secret"] = record.Claim.ResumeSecret.ToBearer(), ["code"] = record.Code.OriginalCode, ["created_at"] = record.CreatedAt.UtcDateTime.ToString("O"), ["expires_at"] = record.ExpiresAt.UtcDateTime.ToString("O"), ["local_stage"] = record.LocalStage.ToString() };
         if (record.Snapshot != null) data["snapshot"] = record.Snapshot.ToWire();
         var plain = JsonSerializer.SerializeToUtf8Bytes(data); byte[] encrypted;
-        try { encrypted = protection.Protect(plain); } finally { Array.Clear(plain, 0, plain.Length); }
-        if (encrypted.Length > MaximumRecordBytes) throw new IOException("Resume record is too large.");
+        try
+        {
+            if (plain.Length > MaximumPlainRecordBytes) throw new IOException("Resume record is too large.");
+            encrypted = protection.Protect(plain);
+        }
+        finally { Array.Clear(plain, 0, plain.Length); }
+        if (encrypted.Length > MaximumProtectedRecordBytes) throw new IOException("Resume record is too large.");
         var temp = Path.Combine(root, Guid.NewGuid().ToString("N") + ".tmp");
         try { ResumeFileSecurity.WriteNew(temp, encrypted); ResumeFileSecurity.AtomicReplace(temp, RecordPath(record.Claim.ResumeId)); }
         finally { if (File.Exists(temp)) File.Delete(temp); }
@@ -103,11 +109,28 @@ public sealed class DpapiResumeStore : IResumeStore
             var path = Path.Combine(root, "store.lock");
             for (var attempt = 0; ; attempt++)
             {
-                try { return new Transaction(pinned, ResumeFileSecurity.OpenLock(path)); }
-                catch (IOException) when (attempt < 100) { Thread.Sleep(10); }
+                FileStream file;
+                try { file = ResumeFileSecurity.OpenLock(path); }
+                catch (IOException) when (attempt < 100) { Thread.Sleep(10); continue; }
+                try
+                {
+                    ReclaimOrphanTemps();
+                    return new Transaction(pinned, file);
+                }
+                catch { file.Dispose(); throw; }
             }
         }
         catch { pinned.Dispose(); throw; }
+    }
+    private void ReclaimOrphanTemps()
+    {
+        // This runs only after the exclusive store lock and directory pins are held.
+        // A committed record never needs a leftover protected temporary copy.
+        foreach (var path in Directory.GetFiles(root, "*.tmp"))
+        {
+            ResumeFileSecurity.ValidatePrivate(path, false);
+            File.Delete(path);
+        }
     }
     private sealed class Transaction : IDisposable
     { private readonly IDisposable directories, file; internal Transaction(IDisposable directories, IDisposable file) { this.directories = directories; this.file = file; } public void Dispose() { file.Dispose(); directories.Dispose(); } }

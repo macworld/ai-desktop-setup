@@ -48,7 +48,7 @@ public sealed class ResumeStoreTests : IDisposable
     }
     [Fact] public void HalfWrittenTemporaryFileIsNotReadAsRecord()
     {
-        var claim = Store().GetOrCreate(ProtocolFixtures.Code()); File.WriteAllText(Path.Combine(root, "interrupted.tmp"), "half-written");
+        var claim = Store().GetOrCreate(ProtocolFixtures.Code()); ResumeFileSecurity.WriteNew(Path.Combine(root, "interrupted.tmp"), Encoding.UTF8.GetBytes("half-written"));
         Assert.Equal(claim.ClaimId, Store().GetOrCreate(ProtocolFixtures.Code()).ClaimId);
     }
     [Fact] public void RejectsReparsePointWithoutReadingTarget()
@@ -86,6 +86,51 @@ public sealed class ResumeStoreTests : IDisposable
         var store = Store(); var claim = store.GetOrCreate(ProtocolFixtures.Code()); var record = store.Load(claim.ResumeId)!;
         Assert.Throws<ProtocolException>(() => store.Save(new ResumeRecord(record.Claim, record.Code, record.CreatedAt, record.ExpiresAt.AddMinutes(1), LocalStage.Created)));
         clock.UtcNow = clock.UtcNow.AddHours(2); Assert.Null(store.Load(claim.ResumeId));
+    }
+    [Theory][InlineData("revision")][InlineData("reasoning_effort")][InlineData("projection_growth")][InlineData("ascii_escape")]
+    public void UnicodeNetworkBoundaryRoundTripsInStoredRepresentation(string field)
+    {
+        var json = ProtocolFixtures.SessionJson(); var revision = new string('界', 40000);
+        if (field == "reasoning_effort") { json["client"]![field] = revision; }
+        else if (field == "revision") json[field] = revision;
+        else if (field == "ascii_escape") json["revision"] = new string('<', 130000);
+        else
+        {
+            json.Remove("mirrors"); json["revision"] = "";
+            var overhead = Encoding.UTF8.GetByteCount(json.ToJsonString(new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+            json["revision"] = new string('r',131072-overhead);
+        }
+        var text = json.ToJsonString(new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        var bytes = Encoding.UTF8.GetBytes(text); Assert.True(bytes.Length <= 131072);
+        bytes = bytes.Concat(Enumerable.Repeat((byte)' ', 131072 - bytes.Length)).ToArray();
+        var snapshot = SessionSnapshot.Parse(bytes); Assert.True(Encoding.UTF8.GetByteCount(snapshot.ToWire().GetRawText()) > 131072);
+        Assert.Throws<ProtocolException>(() => SessionSnapshot.Parse(bytes.Concat(new byte[] {(byte)' '}).ToArray()));
+        var efforts = field == "reasoning_effort" ? new[] {revision} : new[] {"high"};
+        var validated = new SessionBindingValidator(clock, new SessionAdapterPolicy(efforts, true)).Validate(ProtocolFixtures.Code(), snapshot, null);
+        var store = Store(); var claim = store.GetOrCreate(ProtocolFixtures.Code());
+        store.Save(store.Load(claim.ResumeId)!.Authenticate(validated));
+        var recovered = Store().Load(claim.ResumeId)!;
+        ProtocolFixtures.Canonical(snapshot.ToWire(), recovered.Snapshot!.ToWire());
+        clock.UtcNow = snapshot.ExpiresAt; Assert.Null(Store().Load(claim.ResumeId)); Assert.Empty(Directory.GetFiles(root,"*.resume"));
+    }
+    [Theory][InlineData("restart")][InlineData("expiry")][InlineData("delete")]
+    public void ReclaimsFullyWrittenOrphanProtectedTemps(string operation)
+    {
+        var store = Store(); var claim = store.GetOrCreate(ProtocolFixtures.Code());
+        var orphan = Path.Combine(root, Guid.NewGuid().ToString("N") + ".tmp");
+        ResumeFileSecurity.WriteNew(orphan, File.ReadAllBytes(Directory.GetFiles(root,"*.resume").Single()));
+        Assert.True(File.Exists(orphan));
+        if (operation == "expiry") { clock.UtcNow = clock.UtcNow.AddHours(2); Assert.Null(Store().Load(claim.ResumeId)); }
+        else if (operation == "delete") Store().Delete(claim.ResumeId);
+        else Assert.Equal(claim.ClaimId, Store().GetOrCreate(ProtocolFixtures.Code()).ClaimId);
+        Assert.Empty(Directory.GetFiles(root,"*.tmp"));
+    }
+    [Fact] public void OrphanCleanupRejectsReparseTargets()
+    {
+        var claim = Store().GetOrCreate(ProtocolFixtures.Code()); var outside = root + ".outside";
+        File.WriteAllText(outside,"keep"); var orphan = Path.Combine(root,"unsafe.tmp"); TestCompat.CreateFileSymbolicLink(orphan,outside);
+        try { Assert.Throws<IOException>(() => Store().Load(claim.ResumeId)); Assert.Equal("keep",File.ReadAllText(outside)); Assert.True(File.Exists(orphan)); }
+        finally { File.Delete(outside); }
     }
     [Fact] public void RandomIdCollisionCannotOverwriteAnotherClaim()
     {

@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.RegularExpressions;
 
 namespace AiDesktopSetup.Core.Protocol;
@@ -14,6 +16,24 @@ public static class SetupUrlValidator
     public static string Origin(string normalizedUrl) => normalizedUrl.Substring(0, normalizedUrl.IndexOf('/', 8) is var end && end >= 0 ? end : normalizedUrl.Length);
     public static string Normalize(string text, bool setup) => NormalizeCore(text, setup, false);
     internal static string Asset(string text) => NormalizeCore(text, false, true);
+    private static string CanonicalIpv6(string literal)
+    {
+        if (literal.Contains('%') || !IPAddress.TryParse(literal, out var address) || address.AddressFamily != AddressFamily.InterNetworkV6) throw new ProtocolException();
+        var bytes = address.GetAddressBytes();
+        var groups = Enumerable.Range(0,8).Select(i => (bytes[i * 2] << 8) | bytes[i * 2 + 1]).ToArray();
+        var bestStart = -1; var bestLength = 1;
+        for (var start = 0; start < groups.Length; start++)
+        {
+            if (groups[start] != 0) continue;
+            var end = start;
+            while (end < groups.Length && groups[end] == 0) end++;
+            if (end - start > bestLength) { bestStart = start; bestLength = end - start; }
+            start = end - 1;
+        }
+        var rendered = groups.Select(g => g.ToString("x",CultureInfo.InvariantCulture)).ToArray();
+        if (bestStart < 0) return string.Join(":",rendered);
+        return string.Join(":",rendered.Take(bestStart)) + "::" + string.Join(":",rendered.Skip(bestStart + bestLength));
+    }
     private static string NormalizeCore(string text, bool setup, bool asset)
     {
         if (text is null || text.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)) || text.Contains('\\') || text.IndexOfAny(new[] { '<', '>', '"', '|', '^', '`', '{', '}' }) >= 0) throw new ProtocolException();
@@ -40,7 +60,7 @@ public static class SetupUrlValidator
         if (authority.StartsWith("[", StringComparison.Ordinal))
         {
             var bracket = authority.IndexOf(']'); if (bracket < 0) throw new ProtocolException();
-            host = authority.Substring(0, bracket + 1).ToLowerInvariant();
+            host = "[" + CanonicalIpv6(authority.Substring(1, bracket - 1)) + "]";
             if (authority.Length > bracket + 1) { if (authority[bracket + 1] != ':') throw new ProtocolException(); port = authority.Substring(bracket + 2); if (port.Length == 0) throw new ProtocolException(); }
         }
         else
@@ -56,8 +76,12 @@ public static class SetupUrlValidator
             port = p == 443 ? "" : ":" + p.ToString(CultureInfo.InvariantCulture);
         }
         var result = "https://" + host + port + path + suffix;
-        if (!Uri.TryCreate(result, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.UserInfo.Length != 0 || uri.HostNameType == UriHostNameType.Unknown || !string.Equals(uri.Host.Trim('[', ']'), host.Trim('[', ']'), StringComparison.OrdinalIgnoreCase)) throw new ProtocolException();
-        if (asset && Regex.IsMatch(Uri.UnescapeDataString(suffix), @"(?i)(?:[?&#]|^)(?:access_token|api_key|authorization|credential|secret|proof|token|key)=", RegexOptions.CultureInvariant)) throw new ProtocolException();
+        if (!Uri.TryCreate(result, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.UserInfo.Length != 0 || uri.HostNameType == UriHostNameType.Unknown) throw new ProtocolException();
+        if (host.StartsWith("[", StringComparison.Ordinal))
+        {
+            if (uri.HostNameType != UriHostNameType.IPv6) throw new ProtocolException();
+        }
+        else if (!string.Equals(uri.Host, host, StringComparison.OrdinalIgnoreCase)) throw new ProtocolException();
         return result;
     }
 }

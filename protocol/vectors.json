@@ -4296,6 +4296,196 @@
         "accept": false,
         "error_code": "invalid_request"
       }
+    },
+    {
+      "id": "url-ipv6-expanded",
+      "kind": "url",
+      "input": {
+        "role": "setup_base_url",
+        "value": "HTTPS://[2001:0DB8:0000:0000:0000:0000:0000:0001]:443/Tenant/Setup"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[2001:db8::1]/Tenant/Setup"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-compressed",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[2001:db8::1]/Tenant/v1/"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[2001:db8::1]/Tenant/v1/"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-equivalent-binding",
+      "kind": "url",
+      "input": {
+        "role": "binding",
+        "value": "https://[2001:0db8:0000:0000:0000:0000:0000:0001]:443/Tenant/v1/",
+        "bound": "https://[2001:db8::1]/Tenant/v1/"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[2001:db8::1]/Tenant/v1/"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-mapped-dotted",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[::ffff:192.0.2.128]/v1"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[::ffff:c000:280]/v1"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-mapped-hex",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[0000:0000:0000:0000:0000:ffff:c000:0280]:8443/Tenant/v1/"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[::ffff:c000:280]:8443/Tenant/v1/"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-port-zero",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[::1]:0/Tenant/v1"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[::1]:0/Tenant/v1"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-longest-zero-run",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[2001:0:0:1:0:0:0:1]/v1"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[2001:0:0:1::1]/v1"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-first-zero-run-tie",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[2001:0:0:1:0:0:1:1]/v1"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[2001::1:0:0:1:1]/v1"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-single-zero-group",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[2001:0db8:0000:0001:0002:0003:0004:0005]/v1"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[2001:db8:0:1:2:3:4:5]/v1"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-all-zero",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[0000:0000:0000:0000:0000:0000:0000:0000]:443/v1"
+      },
+      "expected": {
+        "accept": true,
+        "canonical": {
+          "url": "https://[::]/v1"
+        }
+      }
+    },
+    {
+      "id": "url-ipv6-scope-raw",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[fe80::1%eth0]/v1"
+      },
+      "expected": {
+        "accept": false,
+        "error_code": "invalid_request"
+      }
+    },
+    {
+      "id": "url-ipv6-scope-encoded",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[fe80::1%25eth0]/v1"
+      },
+      "expected": {
+        "accept": false,
+        "error_code": "invalid_request"
+      }
+    },
+    {
+      "id": "url-ipv6-port-binding-mismatch",
+      "kind": "url",
+      "input": {
+        "role": "binding",
+        "value": "https://[2001:db8::1]:8443/v1",
+        "bound": "https://[2001:db8::1]/v1"
+      },
+      "expected": {
+        "accept": false,
+        "error_code": "invalid_request"
+      }
+    },
+    {
+      "id": "url-ipv6-invalid-address",
+      "kind": "url",
+      "input": {
+        "role": "api_base_url",
+        "value": "https://[2001::db8::1]/v1"
+      },
+      "expected": {
+        "accept": false,
+        "error_code": "invalid_request"
+      }
     }
   ]
 }

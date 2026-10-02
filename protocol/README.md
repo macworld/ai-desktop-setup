@@ -71,6 +71,15 @@ insert this semantic default.
 | `credentials`: direct body or `{body, credential_type?, binding?}` | Response structure, bearer syntax and, when supplied, original mode and session/API binding. Canonical is the known response body. |
 | `error`: `{http_status, headers, body}` | Fixed error shape, status/code pairing and `no-store`; canonical is the error body. 429 carries the fixture's `Retry-After`; 5xx uses `temporarily_unavailable`. |
 
+IPv6 URL canonicalization is explicit across runtimes: bracketed expanded or
+compressed literals use lowercase hexadecimal 16-bit groups without leading
+zeros, compress the longest zero run of at least two groups (first on ties), and
+render IPv4-mapped tails as hexadecimal groups. Zone/scope identifiers reject in
+v1. Preserve paths and ports, and compare canonical addresses for origin/binding;
+do not use a URI library's display spelling as the shared canonical value. The
+IPv6 URL vectors cover equivalence, mapped tails, compression ties, ports and
+scope rejection.
+
 Size-boundary fixtures use `{body, wire_body_bytes}` for bootstrap or credentials.
 Serialize `body` as compact UTF-8 JSON (no ASCII escaping), then append ASCII
 space bytes until the complete body is exactly `wire_body_bytes` long. This is
