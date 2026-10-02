@@ -12,7 +12,8 @@ project/repository URL and named real maintainers must be supplied when publicat
 and the Foundation application are authorized. Do not invent identities or claim
 Foundation support before acceptance. Signing does not guarantee SmartScreen trust.
 
-A future signing workflow must use this order:
+The staged workflow follows this order (implementation and external setup are
+documented in [signed-release.md](signed-release.md); it has not been executed):
 
 1. Build and test a frozen source commit on the trusted hosted build system.
 2. Inventory owned inner binaries and retained third-party files. Request signing
@@ -22,9 +23,9 @@ A future signing workflow must use this order:
 4. Package those verified inner bytes, then request signing for each final outer EXE.
    This is a distinct request with its own approval policy.
 5. Verify the final outer signatures/timestamps and extracted inner byte hashes.
-   Compute final hashes and attestations only after the final signatures exist.
-6. Review the exact source/run/artifact IDs and final bytes, then publish an immutable
-   release. Do not rebuild, alter, or re-sign an approved artifact during promotion.
+   Compute final hashes only after the final signatures exist.
+6. Require exact-candidate native Windows and fresh private audit acceptance, then
+   attest the final source/run/artifact-bound bytes and publish an immutable release. Do not rebuild, alter, or re-sign an approved artifact during promotion.
 
 Submitters may request signatures; designated approvers authorize each request.
 Release approvers accept the exact completed candidate. Configure these real roles,

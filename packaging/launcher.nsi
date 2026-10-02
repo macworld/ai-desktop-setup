@@ -107,7 +107,11 @@ Section
 
   ClearErrors
   SetOutPath "$PayloadPath"
+!ifdef PAYLOAD_INCLUDE
+  !include "${PAYLOAD_INCLUDE}"
+!else
   File /r "${PAYLOAD_DIR}/*"
+!endif
   IfErrors preparation_failed
   ; Keep the complete payload, including .exe.config and DLLs, alive until the
   ; UI exits. Its elevated helper is launched from the inner executable and is

@@ -1,0 +1,437 @@
+{
+  "schema_version": 1,
+  "wrapper_sha256": "8d276b0310d38eed5911d0afdcd32b2c2e6561838121c91c953b5dc155364171",
+  "nsis_version": "3.12",
+  "nsis_source_commit": "e3f60402bcdf7be822d159b531c6e38ddf32de12",
+  "architectures": {
+    "x64": {
+      "header_sha256": "ab71d8d583bfdfd43c7f6823ad8d132e67bfc1431eef2caa3cea14a8d634ca90",
+      "files": [
+        {
+          "instruction": 9,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 14,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 21,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 43,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 50,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 56,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 61,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 66,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 71,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 80,
+          "name": "AI.Desktop.Setup.Core.dll",
+          "destination": "{var:32}\\AI.Desktop.Setup.Core.dll",
+          "ownership": "payload",
+          "path": "AI.Desktop.Setup.Core.dll"
+        },
+        {
+          "instruction": 82,
+          "name": "AI.Desktop.Setup.exe",
+          "destination": "{var:32}\\AI.Desktop.Setup.exe",
+          "ownership": "payload",
+          "path": "AI.Desktop.Setup.exe"
+        },
+        {
+          "instruction": 84,
+          "name": "AI.Desktop.Setup.exe.config",
+          "destination": "{var:32}\\AI.Desktop.Setup.exe.config",
+          "ownership": "payload",
+          "path": "AI.Desktop.Setup.exe.config"
+        },
+        {
+          "instruction": 86,
+          "name": "LICENSE.txt",
+          "destination": "{var:32}\\LICENSE.txt",
+          "ownership": "payload",
+          "path": "LICENSE.txt"
+        },
+        {
+          "instruction": 88,
+          "name": "Microsoft.Bcl.AsyncInterfaces.dll",
+          "destination": "{var:32}\\Microsoft.Bcl.AsyncInterfaces.dll",
+          "ownership": "payload",
+          "path": "Microsoft.Bcl.AsyncInterfaces.dll"
+        },
+        {
+          "instruction": 90,
+          "name": "System.Buffers.dll",
+          "destination": "{var:32}\\System.Buffers.dll",
+          "ownership": "payload",
+          "path": "System.Buffers.dll"
+        },
+        {
+          "instruction": 92,
+          "name": "System.IO.Pipelines.dll",
+          "destination": "{var:32}\\System.IO.Pipelines.dll",
+          "ownership": "payload",
+          "path": "System.IO.Pipelines.dll"
+        },
+        {
+          "instruction": 94,
+          "name": "System.Memory.dll",
+          "destination": "{var:32}\\System.Memory.dll",
+          "ownership": "payload",
+          "path": "System.Memory.dll"
+        },
+        {
+          "instruction": 96,
+          "name": "System.Numerics.Vectors.dll",
+          "destination": "{var:32}\\System.Numerics.Vectors.dll",
+          "ownership": "payload",
+          "path": "System.Numerics.Vectors.dll"
+        },
+        {
+          "instruction": 98,
+          "name": "System.Runtime.CompilerServices.Unsafe.dll",
+          "destination": "{var:32}\\System.Runtime.CompilerServices.Unsafe.dll",
+          "ownership": "payload",
+          "path": "System.Runtime.CompilerServices.Unsafe.dll"
+        },
+        {
+          "instruction": 100,
+          "name": "System.Text.Encodings.Web.dll",
+          "destination": "{var:32}\\System.Text.Encodings.Web.dll",
+          "ownership": "payload",
+          "path": "System.Text.Encodings.Web.dll"
+        },
+        {
+          "instruction": 102,
+          "name": "System.Text.Json.dll",
+          "destination": "{var:32}\\System.Text.Json.dll",
+          "ownership": "payload",
+          "path": "System.Text.Json.dll"
+        },
+        {
+          "instruction": 104,
+          "name": "System.Threading.Tasks.Extensions.dll",
+          "destination": "{var:32}\\System.Threading.Tasks.Extensions.dll",
+          "ownership": "payload",
+          "path": "System.Threading.Tasks.Extensions.dll"
+        },
+        {
+          "instruction": 106,
+          "name": "THIRD-PARTY-NOTICES.md",
+          "destination": "{var:32}\\THIRD-PARTY-NOTICES.md",
+          "ownership": "payload",
+          "path": "THIRD-PARTY-NOTICES.md"
+        },
+        {
+          "instruction": 108,
+          "name": "THIRD-PARTY-NOTICES.TXT",
+          "destination": "{var:32}\\licenses\\Microsoft.Bcl.AsyncInterfaces\\THIRD-PARTY-NOTICES.TXT",
+          "ownership": "payload",
+          "path": "licenses/Microsoft.Bcl.AsyncInterfaces/THIRD-PARTY-NOTICES.TXT"
+        },
+        {
+          "instruction": 110,
+          "name": "COPYING",
+          "destination": "{var:32}\\licenses\\NSIS\\COPYING",
+          "ownership": "payload",
+          "path": "licenses/NSIS/COPYING"
+        },
+        {
+          "instruction": 112,
+          "name": "SOURCE.md",
+          "destination": "{var:32}\\licenses\\NSIS\\SOURCE.md",
+          "ownership": "payload",
+          "path": "licenses/NSIS/SOURCE.md"
+        },
+        {
+          "instruction": 114,
+          "name": "THIRD-PARTY-NOTICES.TXT",
+          "destination": "{var:32}\\licenses\\System.IO.Pipelines\\THIRD-PARTY-NOTICES.TXT",
+          "ownership": "payload",
+          "path": "licenses/System.IO.Pipelines/THIRD-PARTY-NOTICES.TXT"
+        },
+        {
+          "instruction": 116,
+          "name": "THIRD-PARTY-NOTICES.TXT",
+          "destination": "{var:32}\\licenses\\System.Text.Encodings.Web\\THIRD-PARTY-NOTICES.TXT",
+          "ownership": "payload",
+          "path": "licenses/System.Text.Encodings.Web/THIRD-PARTY-NOTICES.TXT"
+        },
+        {
+          "instruction": 118,
+          "name": "THIRD-PARTY-NOTICES.TXT",
+          "destination": "{var:32}\\licenses\\System.Text.Json\\THIRD-PARTY-NOTICES.TXT",
+          "ownership": "payload",
+          "path": "licenses/System.Text.Json/THIRD-PARTY-NOTICES.TXT"
+        },
+        {
+          "instruction": 120,
+          "name": "LICENSE.txt",
+          "destination": "{var:32}\\licenses\\dotnet\\LICENSE.txt",
+          "ownership": "payload",
+          "path": "licenses/dotnet/LICENSE.txt"
+        },
+        {
+          "instruction": 122,
+          "name": "SOURCE.md",
+          "destination": "{var:32}\\licenses\\dotnet\\SOURCE.md",
+          "ownership": "payload",
+          "path": "licenses/dotnet/SOURCE.md"
+        }
+      ]
+    },
+    "arm64": {
+      "header_sha256": "59a22a8d22497adc039f52d5929deb0615c93c2c3379db324ade0967dbfdc8dc",
+      "files": [
+        {
+          "instruction": 9,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 14,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 21,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 42,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 49,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 55,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 60,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 65,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 70,
+          "name": "{var:26}\\System.dll",
+          "destination": "{shell:2525}\\{var:26}\\System.dll",
+          "ownership": "tooling"
+        },
+        {
+          "instruction": 79,
+          "name": "AI.Desktop.Setup.Core.dll",
+          "destination": "{var:32}\\AI.Desktop.Setup.Core.dll",
+          "ownership": "payload",
+          "path": "AI.Desktop.Setup.Core.dll"
+        },
+        {
+          "instruction": 81,
+          "name": "AI.Desktop.Setup.exe",
+          "destination": "{var:32}\\AI.Desktop.Setup.exe",
+          "ownership": "payload",
+          "path": "AI.Desktop.Setup.exe"
+        },
+        {
+          "instruction": 83,
+          "name": "AI.Desktop.Setup.exe.config",
+          "destination": "{var:32}\\AI.Desktop.Setup.exe.config",
+          "ownership": "payload",
+          "path": "AI.Desktop.Setup.exe.config"
+        },
+        {
+          "instruction": 85,
+          "name": "LICENSE.txt",
+          "destination": "{var:32}\\LICENSE.txt",
+          "ownership": "payload",
+          "path": "LICENSE.txt"
+        },
+        {
+          "instruction": 87,
+          "name": "Microsoft.Bcl.AsyncInterfaces.dll",
+          "destination": "{var:32}\\Microsoft.Bcl.AsyncInterfaces.dll",
+          "ownership": "payload",
+          "path": "Microsoft.Bcl.AsyncInterfaces.dll"
+        },
+        {
+          "instruction": 89,
+          "name": "System.Buffers.dll",
+          "destination": "{var:32}\\System.Buffers.dll",
+          "ownership": "payload",
+          "path": "System.Buffers.dll"
+        },
+        {
+          "instruction": 91,
+          "name": "System.IO.Pipelines.dll",
+          "destination": "{var:32}\\System.IO.Pipelines.dll",
+          "ownership": "payload",
+          "path": "System.IO.Pipelines.dll"
+        },
+        {
+          "instruction": 93,
+          "name": "System.Memory.dll",
+          "destination": "{var:32}\\System.Memory.dll",
+          "ownership": "payload",
+          "path": "System.Memory.dll"
+        },
+        {
+          "instruction": 95,
+          "name": "System.Numerics.Vectors.dll",
+          "destination": "{var:32}\\System.Numerics.Vectors.dll",
+          "ownership": "payload",
+          "path": "System.Numerics.Vectors.dll"
+        },
+        {
+          "instruction": 97,
+          "name": "System.Runtime.CompilerServices.Unsafe.dll",
+          "destination": "{var:32}\\System.Runtime.CompilerServices.Unsafe.dll",
+          "ownership": "payload",
+          "path": "System.Runtime.CompilerServices.Unsafe.dll"
+        },
+        {
+          "instruction": 99,
+          "name": "System.Text.Encodings.Web.dll",
+          "destination": "{var:32}\\System.Text.Encodings.Web.dll",
+          "ownership": "payload",
+          "path": "System.Text.Encodings.Web.dll"
+        },
+        {
+          "instruction": 101,
+          "name": "System.Text.Json.dll",
+          "destination": "{var:32}\\System.Text.Json.dll",
+          "ownership": "payload",
+          "path": "System.Text.Json.dll"
+        },
+        {
+          "instruction": 103,
+          "name": "System.Threading.Tasks.Extensions.dll",
+          "destination": "{var:32}\\System.Threading.Tasks.Extensions.dll",
+          "ownership": "payload",
+          "path": "System.Threading.Tasks.Extensions.dll"
+        },
+        {
+          "instruction": 105,
+          "name": "THIRD-PARTY-NOTICES.md",
+          "destination": "{var:32}\\THIRD-PARTY-NOTICES.md",
+          "ownership": "payload",
+          "path": "THIRD-PARTY-NOTICES.md"
+        },
+        {
+          "instruction": 107,
+          "name": "THIRD-PARTY-NOTICES.TXT",
+          "destination": "{var:32}\\licenses\\Microsoft.Bcl.AsyncInterfaces\\THIRD-PARTY-NOTICES.TXT",
+          "ownership": "payload",
+          "path": "licenses/Microsoft.Bcl.AsyncInterfaces/THIRD-PARTY-NOTICES.TXT"
+        },
+        {
+          "instruction": 109,
+          "name": "COPYING",
+          "destination": "{var:32}\\licenses\\NSIS\\COPYING",
+          "ownership": "payload",
+          "path": "licenses/NSIS/COPYING"
+        },
+        {
+          "instruction": 111,
+          "name": "SOURCE.md",
+          "destination": "{var:32}\\licenses\\NSIS\\SOURCE.md",
+          "ownership": "payload",
+          "path": "licenses/NSIS/SOURCE.md"
+        },
+        {
+          "instruction": 113,
+          "name": "THIRD-PARTY-NOTICES.TXT",
+          "destination": "{var:32}\\licenses\\System.IO.Pipelines\\THIRD-PARTY-NOTICES.TXT",
+          "ownership": "payload",
+          "path": "licenses/System.IO.Pipelines/THIRD-PARTY-NOTICES.TXT"
+        },
+        {
+          "instruction": 115,
+          "name": "THIRD-PARTY-NOTICES.TXT",
+          "destination": "{var:32}\\licenses\\System.Text.Encodings.Web\\THIRD-PARTY-NOTICES.TXT",
+          "ownership": "payload",
+          "path": "licenses/System.Text.Encodings.Web/THIRD-PARTY-NOTICES.TXT"
+        },
+        {
+          "instruction": 117,
+          "name": "THIRD-PARTY-NOTICES.TXT",
+          "destination": "{var:32}\\licenses\\System.Text.Json\\THIRD-PARTY-NOTICES.TXT",
+          "ownership": "payload",
+          "path": "licenses/System.Text.Json/THIRD-PARTY-NOTICES.TXT"
+        },
+        {
+          "instruction": 119,
+          "name": "LICENSE.txt",
+          "destination": "{var:32}\\licenses\\dotnet\\LICENSE.txt",
+          "ownership": "payload",
+          "path": "licenses/dotnet/LICENSE.txt"
+        },
+        {
+          "instruction": 121,
+          "name": "SOURCE.md",
+          "destination": "{var:32}\\licenses\\dotnet\\SOURCE.md",
+          "ownership": "payload",
+          "path": "licenses/dotnet/SOURCE.md"
+        }
+      ]
+    }
+  },
+  "system_plugin_sha256": "996645d7f16a6294babb6da83478062aed7b72318d7a51b66e90ab5d3edc51a5",
+  "nsis_archive_sha256": "56581f90db321581c5381193d796fffcf2d24b2f8fed2160a6c6a3baa67f2c4f",
+  "nsis_source_sha256": "f3ed7a8e4aa2cf4e8cf47d3b563a02559e0cb4934db2662b2f9661b824e2b186"
+}

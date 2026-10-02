@@ -9,5 +9,10 @@
     "source_url": "https://downloads.sourceforge.net/project/nsis/NSIS%203/3.12/nsis-3.12-src.tar.bz2",
     "source_sha256": "f3ed7a8e4aa2cf4e8cf47d3b563a02559e0cb4934db2662b2f9661b824e2b186",
     "source_commit": "e3f60402bcdf7be822d159b531c6e38ddf32de12"
+  },
+  "pester": {
+    "version": "5.7.1",
+    "url": "https://www.powershellgallery.com/api/v2/package/Pester/5.7.1",
+    "sha256": "4a27904c6814a5fbe4758f8e49861f6a1994aee77b71165a5c43c0371ba6c580"
   }
 }

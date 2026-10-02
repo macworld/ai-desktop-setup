@@ -61,3 +61,7 @@ Ordinary hosted CI permits only the two named existing official-MSIX fixture tes
 to be skipped when no real package fixture is supplied. It records those exact
 identities as unverified native gates. Every other discovered test must execute and
 pass; empty runs, unexpected skips, inconsistent TRX counts and failures stop CI.
+
+The staged [signed-release workflow](docs/signed-release.md) is implemented but awaits
+Foundation configuration, hosted execution and exact-candidate native/private acceptance.
+Local unsigned outputs are not signed releases.

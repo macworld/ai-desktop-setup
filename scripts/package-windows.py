@@ -39,10 +39,45 @@ def validate_runtime(source, expected):
     return result
 
 
+def stage_payload(source, payload, root):
+    expected_runtime = json.loads((root / "build/runtime-inventory.json").read_text())
+    for item in sorted(source.rglob("*")):
+        if item.is_symlink():
+            raise SystemExit(f"Refusing payload symlink: {item}")
+        if not item.is_file() or item.suffix.lower() in {".pdb", ".xml"}:
+            continue
+        destination = payload / item.relative_to(source)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(item, destination)
+    # Distribute owned and upstream dependency notices alongside the executable.
+    shutil.copy2(root / "LICENSE", payload / "LICENSE.txt")
+    shutil.copy2(root / "THIRD-PARTY-NOTICES.md", payload / "THIRD-PARTY-NOTICES.md")
+    shutil.copytree(root / "licenses", payload / "licenses")
+    assets = json.loads((root / "Core/obj/project.assets.json").read_text())
+    for package, entry in assets["libraries"].items():
+        if entry["type"] != "package" or package.startswith("Microsoft.NETFramework.ReferenceAssemblies"):
+            continue
+        for folder in assets["packageFolders"]:
+            package_path = Path(folder) / entry["path"]
+            for notice in sorted(package_path.glob("*")):
+                if notice.is_file() and notice.name.lower().startswith(("license", "notice", "third-party-notices")):
+                    destination = payload / "licenses" / package.split("/")[0] / notice.name
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(notice, destination)
+            if package_path.exists():
+                break
+    for name, entry in expected_runtime.items():
+        if entry['notice_required']:
+            notice = payload / 'licenses' / entry['package'] / 'THIRD-PARTY-NOTICES.TXT'
+            if not notice.is_file() or hashlib.sha256(notice.read_bytes()).hexdigest() != '6d15e10a101c6bfff2ab4429ed061bf76c456fc4b23ad6b03e0d0f8377148a21':
+                raise ValueError('Required package notices are missing or changed')
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     parser.add_argument("--makensis", default=os.environ.get("AI_SETUP_MAKENSIS", "makensis"))
+    parser.add_argument("--payload-only", action="store_true", help="Stage complete unsigned payloads without packaging or release hashes")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     app = root / "App"
@@ -77,36 +112,9 @@ def main() -> None:
         runtime_inventory[architecture] = validate_runtime(source, expected_runtime)
         payload = output / ("payload-" + architecture)
         payload.mkdir(exist_ok=False)
-        for item in sorted(source.rglob("*")):
-            if item.is_symlink():
-                raise SystemExit(f"Refusing payload symlink: {item}")
-            if not item.is_file() or item.suffix.lower() in {".pdb", ".xml"}:
-                continue
-            destination = payload / item.relative_to(source)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(item, destination)
-        # Distribute owned and upstream dependency notices alongside the executable.
-        shutil.copy2(root / "LICENSE", payload / "LICENSE.txt")
-        shutil.copy2(root / "THIRD-PARTY-NOTICES.md", payload / "THIRD-PARTY-NOTICES.md")
-        shutil.copytree(root / "licenses", payload / "licenses")
-        assets = json.loads((root / "Core/obj/project.assets.json").read_text())
-        for package, entry in assets["libraries"].items():
-            if entry["type"] != "package" or package.startswith("Microsoft.NETFramework.ReferenceAssemblies"):
-                continue
-            for folder in assets["packageFolders"]:
-                package_path = Path(folder) / entry["path"]
-                for notice in sorted(package_path.glob("*")):
-                    if notice.is_file() and notice.name.lower().startswith(("license", "notice", "third-party-notices")):
-                        destination = payload / "licenses" / package.split("/")[0] / notice.name
-                        destination.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(notice, destination)
-                if package_path.exists():
-                    break
-        for name, entry in expected_runtime.items():
-            if entry['notice_required']:
-                notice = payload / 'licenses' / entry['package'] / 'THIRD-PARTY-NOTICES.TXT'
-                if not notice.is_file() or hashlib.sha256(notice.read_bytes()).hexdigest() != '6d15e10a101c6bfff2ab4429ed061bf76c456fc4b23ad6b03e0d0f8377148a21':
-                    raise ValueError('Required package notices are missing or changed')
+        stage_payload(source, payload, root)
+        if args.payload_only:
+            continue
         filename = f"AI-Desktop-Setup-{version}-{architecture}.exe"
         target = output / filename
         if target.exists():
@@ -122,6 +130,9 @@ def main() -> None:
         entries[key] = dict(file=filename, sha256=digest,
                             version=version + "-preview", bytes=target.stat().st_size, signed=False)
         payload_sizes[architecture] = sum(p.stat().st_size for p in payload.rglob("*") if p.is_file())
+    if args.payload_only:
+        print('Complete unsigned payloads staged; signing is a separate stage.')
+        return
     timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
     (output / "manifest.json").write_text(json.dumps(dict(updated_at=timestamp, downloads=entries), indent=2) + "\n")
     (output / "SHA256SUMS").write_text("".join(v["sha256"] + "  " + v["file"] + "\n" for v in entries.values()))
