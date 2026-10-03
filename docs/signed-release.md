@@ -4,8 +4,9 @@ The source and staged workflow are public at
 [macworld/ai-desktop-setup](https://github.com/macworld/ai-desktop-setup). The signed
 release workflow has not run against SignPath. See
 [Actions](https://github.com/macworld/ai-desktop-setup/actions) for current outcomes.
-There is no Foundation submission or approval, signing certificate, full native
-installation acceptance, or published signed release. Native ARM64 wrapper UI
+The Foundation application was submitted on 2026-10-03 and is awaiting review;
+eligibility is not guaranteed. There is no Foundation approval, signing certificate,
+full native installation acceptance, or published signed release. Native ARM64 wrapper UI
 startup passed only. Formal signing remains disabled (`RELEASE_ENABLED=false`).
 
 [Wenhao Liu (macworld)](https://github.com/macworld) is the sole known maintainer,
