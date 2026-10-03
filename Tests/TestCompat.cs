@@ -123,6 +123,7 @@ internal static class ConfigurationCrashProcess
 {
     public static void Main(string[] args)
     {
+        if (args.Length == 1 && args[0] == "agsp-interoperability") { Environment.Exit(AiDesktopSetup.Tests.Protocol.InteropLiveProcess.Run()); return; }
         if (args.Length != 4 || args[0] != "configuration-crash") Environment.Exit(74);
         var journal = new AiDesktopSetup.Core.Recovery.ConfigurationJournal(Path.Combine(args[1],"journal"),new AiDesktopSetup.Core.Protocol.ResumeId(Guid.Parse(args[2])));
         var service = new AiDesktopSetup.Core.ConfigurationService(journal);
