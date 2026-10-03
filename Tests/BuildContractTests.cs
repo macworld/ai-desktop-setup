@@ -15,10 +15,21 @@ public partial class RuntimeCompatibilityTests
         var x64 = Evaluate("x64"); var arm64 = Evaluate("ARM64");
         Assert.Equal("net48", x64.GetProperty("TargetFramework").GetString());
         Assert.Equal("net481", arm64.GetProperty("TargetFramework").GetString());
+        Assert.Equal("x64", x64.GetProperty("PlatformTarget").GetString());
+        Assert.Equal("ARM64", arm64.GetProperty("PlatformTarget").GetString());
+        Assert.Equal("", x64.GetProperty("RuntimeIdentifier").GetString());
+        Assert.Equal("", arm64.GetProperty("RuntimeIdentifier").GetString());
         Assert.False(bool.Parse(x64.GetProperty("SelfContained").GetString()!));
         Assert.False(bool.Parse(arm64.GetProperty("SelfContained").GetString()!));
         Assert.Equal("AI.Desktop.Setup", x64.GetProperty("AssemblyName").GetString());
         Assert.Equal("AiDesktopSetup", x64.GetProperty("RootNamespace").GetString());
+    }
+    [Theory]
+    [InlineData("x64", "win-x64")]
+    [InlineData("ARM64", "win-arm64")]
+    public void ExplicitRuntimeIdentifiersArePreserved(string platform, string runtimeIdentifier)
+    {
+        Assert.Equal(runtimeIdentifier, Evaluate(platform, runtimeIdentifier).GetProperty("RuntimeIdentifier").GetString());
     }
     [Fact]
     public void ReleaseAssembliesDoNotExposePrivateBuildPaths()
@@ -50,6 +61,7 @@ public partial class RuntimeCompatibilityTests
             var iconUri = XDocument.Load(Path.Combine(root, "App", "MainWindow.xaml")).Root!.Attribute("Icon")!.Value;
             using var file = File.OpenRead(Path.Combine(output, "AI.Desktop.Setup.exe"));
             using var pe = new PEReader(file);
+            Assert.Equal(platform == "x64" ? Machine.Amd64 : Machine.Arm64, pe.PEHeaders.CoffHeader.Machine);
             var metadata = pe.GetMetadataReader();
             var resource = metadata.ManifestResources.Select(metadata.GetManifestResource)
                 .Single(value => metadata.GetString(value.Name) == "AI.Desktop.Setup.g.resources");
@@ -69,11 +81,12 @@ public partial class RuntimeCompatibilityTests
         finally { if (Directory.Exists(output)) Directory.Delete(output, recursive: true); }
     }
 
-    private static JsonElement Evaluate(string platform)
+    private static JsonElement Evaluate(string platform, string? runtimeIdentifier = null)
     {
         var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        foreach (var argument in new[] { "msbuild", Path.Combine(SourceRoot.Find(), "App", "AI.Desktop.Setup.csproj"), "-nologo", "-p:Platform=" + platform, "-getProperty:TargetFramework,SelfContained,AssemblyName,RootNamespace" })
+        foreach (var argument in new[] { "msbuild", Path.Combine(SourceRoot.Find(), "App", "AI.Desktop.Setup.csproj"), "-nologo", "-p:Platform=" + platform, "-getProperty:TargetFramework,PlatformTarget,RuntimeIdentifier,SelfContained,AssemblyName,RootNamespace" })
             AiDesktopSetup.Core.RuntimeCompat.AddArgument(start, argument);
+        if (runtimeIdentifier is not null) AiDesktopSetup.Core.RuntimeCompat.AddArgument(start, "-p:RuntimeIdentifier=" + runtimeIdentifier);
         using var process = Process.Start(start)!;
         var output = process.StandardOutput.ReadToEnd(); var error = process.StandardError.ReadToEnd(); process.WaitForExit();
         Assert.True(process.ExitCode == 0, error);

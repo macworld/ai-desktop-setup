@@ -1,16 +1,23 @@
 # Code signing and release policy
 
 Local and ordinary pull-request/main CI outputs are unsigned previews (`signed:false`).
-They are not production downloads. Hosted CI execution, native Windows acceptance,
+They are not production downloads. Public source is available at
+[macworld/ai-desktop-setup](https://github.com/macworld/ai-desktop-setup);
+[Releases](https://github.com/macworld/ai-desktop-setup/releases) lists unsigned
+previews when published. No signed release or signing certificate exists.
+Hosted CI execution, native Windows acceptance,
 signing and publication each require their own evidence for the exact candidate.
 
 SignPath Foundation is the intended signing service. No application has been
 submitted or approved, and eligibility is not guaranteed. The application packet
 is this project's published source, MIT license, third-party notices, build workflow,
-security policy, contributor/role assignments and a reviewable preview. A public
-project/repository URL and named real maintainers must be supplied when publication
-and the Foundation application are authorized. Do not invent identities or claim
-Foundation support before acceptance. Signing does not guarantee SmartScreen trust.
+security policy, contributor/role assignments and a reviewable preview. The sole
+known maintainer, author and reviewer is
+[Wenhao Liu (macworld)](https://github.com/macworld), the owner and intended signing
+authority. Actual SignPath submitter/approver roles remain pending Foundation
+approval and setup. All contributors are required to use MFA as project policy;
+this is not verification of any account's MFA status. Foundation support is not
+claimed before acceptance. Signing does not guarantee SmartScreen trust.
 
 The staged workflow follows this order (implementation and external setup are
 documented in [signed-release.md](signed-release.md); it has not been executed):
@@ -28,7 +35,10 @@ documented in [signed-release.md](signed-release.md); it has not been executed):
    attest the final source/run/artifact-bound bytes and publish an immutable release. Do not rebuild, alter, or re-sign an approved artifact during promotion.
 
 Submitters may request signatures; designated approvers authorize each request.
-Release approvers accept the exact completed candidate. Configure these real roles,
+Release approvers accept the exact completed candidate. An independent release
+approver is not yet configured; the sole maintainer's review does not satisfy the
+independent protected-environment gate. Formal signing remains disabled
+(`RELEASE_ENABLED=false`). Configure these real roles,
 expected certificate identity, protected environments, source-origin policies and
 retention externally before enabling a release workflow. Ordinary CI has only
 contents-read permission, no signing secrets and no publication permission.

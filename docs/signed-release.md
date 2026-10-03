@@ -1,8 +1,19 @@
 # Staged signed release
 
-This workflow is implemented locally but has not run against SignPath or a hosted
-Windows runner. No Foundation approval, release certificate, native installation
-acceptance, public repository or published signed release is claimed.
+The source and staged workflow are public at
+[macworld/ai-desktop-setup](https://github.com/macworld/ai-desktop-setup). The signed
+release workflow has not run against SignPath. See
+[Actions](https://github.com/macworld/ai-desktop-setup/actions) for current outcomes.
+There is no Foundation submission or approval, signing certificate, full native
+installation acceptance, or published signed release. Native ARM64 wrapper UI
+startup passed only. Formal signing remains disabled (`RELEASE_ENABLED=false`).
+
+[Wenhao Liu (macworld)](https://github.com/macworld) is the sole known maintainer,
+author and reviewer, and the intended signing authority as repository owner.
+SignPath roles remain pending approval/setup, and an independent release approver
+is not configured. Self-review cannot satisfy the independent environment gates.
+All contributors must use MFA under project policy; account MFA and approval
+configuration have not been verified. See the [Code signing policy](code-signing-policy.md).
 
 `release.yml` accepts protected version tags only, in the configured original
 repository. Ordinary PR/main CI remains unsigned and has no signing secrets.

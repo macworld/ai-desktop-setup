@@ -14,6 +14,13 @@ class NsisTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name)
         self.compiler=os.environ.get('AI_SETUP_MAKENSIS','makensis')
         if not shutil.which(self.compiler):self.skipTest('NSIS 3.12 required')
+    def run_compiler(self,arguments,**kwargs):
+        try:
+            subprocess.run(arguments,check=True,capture_output=True,**kwargs)
+        except subprocess.CalledProcessError as error:
+            stdout=error.stdout.decode('utf-8',errors='replace')
+            stderr=error.stderr.decode('utf-8',errors='replace')
+            self.fail(f'{error}\nstdout:\n{stdout}\nstderr:\n{stderr}')
     def compile(self):
         (self.root/'payload.txt').write_bytes(b'fixture payload')
         (self.root/'fixture.nsi').write_text('''Unicode true
@@ -30,7 +37,7 @@ File "payload.txt"
 SectionEnd
 ''')
         prefix='/' if os.name=='nt' else '-'
-        subprocess.run([self.compiler,prefix+'NOCONFIG',prefix+'V1',str(self.root/'fixture.nsi')],cwd=self.root,check=True,capture_output=True)
+        self.run_compiler([self.compiler,prefix+'NOCONFIG',prefix+'V1',str(self.root/'fixture.nsi')],cwd=self.root)
         return (self.root/'fixture.exe').read_bytes()
     def test_real_nsis_structural_decode(self):
         d=self.m.decode(self.compile());self.assertEqual([r['data'] for r in d['records']],[b'fixture payload'])
@@ -46,6 +53,15 @@ SectionEnd
         with self.assertRaises(ValueError):self.m.verify_payload(self.m.decode(d),{'payload.txt':b'fixture payload'},'x64')
 
 class WrapperContractTests(NsisTests):
+    def test_failed_wrapper_compile_reports_diagnostic_output(self):
+        with self.assertRaises(AssertionError) as failure:
+            self.wrapper(alter='InvalidFixtureInstruction')
+        diagnostic=str(failure.exception)
+        self.assertIn('stdout:',diagnostic)
+        self.assertIn('stderr:',diagnostic)
+        self.assertIn('InvalidFixtureInstruction',diagnostic)
+        self.assertIn('non-zero exit status',diagnostic)
+
     def wrapper(self,architecture='x64',alter=''):
         import json
         root=Path(__file__).resolve().parents[1]
@@ -56,7 +72,7 @@ class WrapperContractTests(NsisTests):
         for name in sorted(expected):
             p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(expected[name])
             parent=Path(name).parent.as_posix();dest='$PayloadPath'+('\\'+parent.replace('/','\\') if parent!='.' else '')
-            include.extend([f'SetOutPath "{dest}"',f'File "{p.as_posix()}"'])
+            include.extend([f'SetOutPath "{dest}"',f'File "{p}"'])
         inc=self.root/'payload.nsh';inc.write_text('\n'.join(include)+'\n',encoding='utf-8')
         wrapper=root/'packaging/launcher.nsi'
         if alter:
@@ -64,7 +80,7 @@ class WrapperContractTests(NsisTests):
             source=source.replace('StrCpy $PayloadPath "$PLUGINSDIR\\app"',alter)
             wrapper=self.root/'changed.nsi';wrapper.write_text(source,encoding='utf-8')
         target=self.root/(architecture+'.exe');prefix='/' if os.name=='nt' else '-'
-        subprocess.run([self.compiler,prefix+'NOCONFIG',prefix+'V1',*[prefix+'D'+x for x in ('PAYLOAD_DIR='+str(self.root),'PAYLOAD_INCLUDE='+str(inc),'OUTPUT_FILE='+str(target),'VERSION=1.2.3','ARCH='+architecture)],str(wrapper)],check=True,capture_output=True)
+        self.run_compiler([self.compiler,prefix+'NOCONFIG',prefix+'V1',prefix+'INPUTCHARSET','UTF8',*[prefix+'D'+x for x in ('PAYLOAD_DIR='+str(self.root),'PAYLOAD_INCLUDE='+str(inc),'OUTPUT_FILE='+str(target),'VERSION=1.2.3','ARCH='+architecture)],str(wrapper)])
         return self.m.decode(target.read_bytes()),expected
 
     def test_both_architectures_extract_complete_exact_bytes(self):
@@ -73,6 +89,17 @@ class WrapperContractTests(NsisTests):
             actual,plugins=self.m.verify_payload(d,expected,arch)
             self.assertEqual(actual,expected);self.assertEqual(len(actual),22)
             self.assertEqual(plugins[0]['ownership'],'third_party')
+
+    def test_wrapper_profile_is_preserved_under_ansi_compiler_default(self):
+        native_run=self.run_compiler
+        prefix='/' if os.name=='nt' else '-'
+        def ansi_default(arguments,**kwargs):
+            native_run([arguments[0],prefix+'INPUTCHARSET','CP1252',*arguments[1:]],**kwargs)
+        self.run_compiler=ansi_default
+        for architecture in ('x64','arm64'):
+            decoded,expected=self.wrapper(architecture)
+            actual,_=self.m.verify_payload(decoded,expected,architecture)
+            self.assertEqual(actual,expected)
 
     def test_changed_payload_missing_extra_or_unclassified_records_rejected(self):
         import copy

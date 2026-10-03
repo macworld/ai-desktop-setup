@@ -23,6 +23,7 @@ function Run([string]$Name, [string]$Executable, [string[]]$Arguments) {
 }
 Run 'stage' $python @((Join-Path $SourceRepository 'build/candidate.py'),'stage','--source',$SourceRepository,'--destination',$source,'--commit',$SourceCommit)
 $lock = Get-Content (Join-Path $source 'build/toolchain.json') -Raw | ConvertFrom-Json
+. (Join-Path $source 'build/download-toolchain.ps1')
 $env:DOTNET_CLI_HOME = Join-Path $BuildRoot 'dotnet-home'
 $env:NUGET_PACKAGES = Join-Path $BuildRoot 'packages'
 $env:TEMP = Join-Path $cohort 'temp'
@@ -35,8 +36,7 @@ Set-Location $source
 if ((& $dotnet --version).Trim() -ne $lock.dotnet_sdk) { throw 'SDK version mismatch' }
 if ((& $python -c 'import platform; print(platform.python_version())').Trim() -ne $lock.python) { throw 'Python version mismatch' }
 $nsisZip = Join-Path $tools 'nsis.zip'
-Invoke-WebRequest $lock.nsis.url -OutFile $nsisZip
-if ((Get-FileHash $nsisZip -Algorithm SHA256).Hash.ToLowerInvariant() -ne $lock.nsis.sha256) { throw 'NSIS archive digest mismatch' }
+Get-PinnedToolchainDownload -Name 'NSIS archive' -Uri $lock.nsis.url -OutFile $nsisZip -Sha256 $lock.nsis.sha256
 Expand-Archive -Path $nsisZip -DestinationPath $tools
 $nsis = Join-Path $tools 'nsis-3.12\makensis.exe'
 $env:AI_SETUP_MAKENSIS = $nsis
@@ -44,8 +44,7 @@ if ((& $nsis /VERSION).Trim() -ne 'v3.12') { throw 'NSIS version mismatch' }
 $attachments = Join-Path $cohort 'attachments'
 New-Item -ItemType Directory -Path $attachments | Out-Null
 $sourceArchive = Join-Path $attachments 'nsis-3.12-src.tar.bz2'
-Invoke-WebRequest $lock.nsis.source_url -OutFile $sourceArchive
-if ((Get-FileHash $sourceArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $lock.nsis.source_sha256) { throw 'NSIS source digest mismatch' }
+Get-PinnedToolchainDownload -Name 'NSIS source' -Uri $lock.nsis.source_url -OutFile $sourceArchive -Sha256 $lock.nsis.source_sha256
 [xml]$project = Get-Content (Join-Path $source 'App/AI.Desktop.Setup.csproj')
 $projectVersion = $project.SelectSingleNode('/Project/PropertyGroup/Version').InnerText
 if ($Version -and $Version -cne $projectVersion) { throw 'Tag version differs from project version' }

@@ -6,7 +6,11 @@ using System.Text.Json.Nodes;
 using AiDesktopSetup.Core.Protocol;
 
 namespace AiDesktopSetup.Tests.Protocol;
+#if !NETFRAMEWORK
+public sealed class SetupSessionClientTests(Xunit.Abstractions.ITestOutputHelper output)
+#else
 public sealed class SetupSessionClientTests
+#endif
 {
     private static readonly ResumeSecret Proof = new(Enumerable.Range(0, 32).Select(i => (byte)i).ToArray());
     private static SessionAccess Access(bool apiKey = false)
@@ -195,23 +199,31 @@ public sealed class SetupSessionClientTests
     {
         using var key = System.Security.Cryptography.RSA.Create(2048);
         var certificateRequest = new System.Security.Cryptography.X509Certificates.CertificateRequest("CN=127.0.0.1",key,System.Security.Cryptography.HashAlgorithmName.SHA256,System.Security.Cryptography.RSASignaturePadding.Pkcs1);
-        using var certificate = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1),DateTimeOffset.UtcNow.AddMinutes(5));
+        using var generated = certificateRequest.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1),DateTimeOffset.UtcNow.AddMinutes(5));
+        using var certificate = HttpsFixture.ImportServerCertificate(generated);
         var source = new System.Net.Sockets.TcpListener(IPAddress.Loopback,0); var redirected = new System.Net.Sockets.TcpListener(IPAddress.Loopback,0); source.Start(); redirected.Start();
         var port = ((IPEndPoint)source.LocalEndpoint).Port; var redirectedPort = ((IPEndPoint)redirected.LocalEndpoint).Port; var redirectedServerRequests = 0;
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var target = Task.Run(async()=> { try { using var connection=await redirected.AcceptTcpClientAsync(stop.Token); Interlocked.Increment(ref redirectedServerRequests); } catch (OperationCanceledException) { } });
         var server = Task.Run(async()=> {
             using var connection=await source.AcceptTcpClientAsync(stop.Token); using var tls=new System.Net.Security.SslStream(connection.GetStream());
-            await tls.AuthenticateAsServerAsync(certificate,false,System.Security.Authentication.SslProtocols.Tls12,false);
-            using var reader=new StreamReader(tls,Encoding.ASCII,false,1024,true); string? line; var contentLength=0;
-            while(!string.IsNullOrEmpty(line=await reader.ReadLineAsync())) if(line.StartsWith("Content-Length:",StringComparison.OrdinalIgnoreCase)) contentLength=int.Parse(line.Substring(15).Trim());
-            var body=new char[contentLength];if(contentLength>0)await reader.ReadBlockAsync(body,0,body.Length);
-            var response=Encoding.ASCII.GetBytes("HTTP/1.1 302 Found\r\nLocation: https://127.0.0.1:"+redirectedPort+"/leak\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");await tls.WriteAsync(response);await tls.FlushAsync();
+            var stage = "TLS handshake";
+            try
+            {
+                await tls.AuthenticateAsServerAsync(new System.Net.Security.SslServerAuthenticationOptions { ServerCertificate = certificate, EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 }, stop.Token);
+                stage = "HTTP request";
+                using var reader=new StreamReader(tls,Encoding.ASCII,false,1024,true); string? line; var contentLength=0;
+                while(!string.IsNullOrEmpty(line=await reader.ReadLineAsync(stop.Token))) if(line.StartsWith("Content-Length:",StringComparison.OrdinalIgnoreCase)) contentLength=int.Parse(line.Substring(15).Trim());
+                var body=new char[contentLength];if(contentLength>0)await reader.ReadBlockAsync(body.AsMemory(),stop.Token);
+                stage = "HTTP response";
+                var response=Encoding.ASCII.GetBytes("HTTP/1.1 302 Found\r\nLocation: https://127.0.0.1:"+redirectedPort+"/leak\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");await tls.WriteAsync(response,stop.Token);await tls.FlushAsync(stop.Token);
+            }
+            catch (Exception e) { output.WriteLine(HttpsFixture.TransportFailure(stage, e)); throw; }
         });
         try
         {
             // Local fixture certificate trust is scoped to this test handler only. No OS trust changes.
-            var handler=ProtocolHttpClients.CreateHandler();handler.ServerCertificateCustomValidationCallback=(_,cert,_,_)=>cert?.Thumbprint==certificate.Thumbprint;
+            var handler=ProtocolHttpClients.CreateHandler();handler.ServerCertificateCustomValidationCallback=(request,cert,_,_)=>request.RequestUri?.GetLeftPart(UriPartial.Authority)=="https://127.0.0.1:"+port && cert != null && cert.RawData.SequenceEqual(certificate.RawData);
             using var clients=new ProtocolHttpClients(handler,new Handler(_=>Response([])),new Handler(_=>Response([])));
             var json=ProtocolFixtures.SessionJson();json["setup_base_url"]="https://127.0.0.1:"+port+"/Tenant/Setup";
             var codeJson=JsonNode.Parse(ProtocolFixtures.Code().ToWire().GetRawText())!;codeJson["setup_base_url"]=json["setup_base_url"]!.DeepClone();
@@ -221,7 +233,7 @@ public sealed class SetupSessionClientTests
             await Assert.ThrowsAsync<ProtocolException>(()=>client.GetCredentialsAsync(access,stop.Token));await server;
             await Task.Delay(100);Assert.Equal(0,redirectedServerRequests);
         }
-        finally { stop.Cancel();source.Stop();redirected.Stop();await target; }
+        finally { stop.Cancel();source.Stop();redirected.Stop();await target; await server; }
     }
 #endif
     [Fact] public void SafeRequestIdHasOnlyMessageSizeLimit()

@@ -1,9 +1,10 @@
 # AGSP v1 contract
 
 This directory contains the neutral AI Gateway Setup Protocol v1 implementation
-contract. It is an unpublished candidate, not an industry standard or a working
-installer. All services, dates, credentials, models, packages and hashes in the
-examples are fictional. Predictable fixture secrets must never be issued in a
+contract published with [AI Desktop Setup](https://github.com/macworld/ai-desktop-setup).
+It remains a candidate contract, not an industry standard or proof of working
+client/service interoperability. All services, dates, credentials, models, packages
+and hashes in the examples are fictional. Predictable fixture secrets must never be issued in a
 real service.
 
 - [Protocol](agsp-v1.md): normative behavior, trust boundaries and validation rules.

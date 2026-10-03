@@ -16,18 +16,18 @@ using AiDesktopSetup.Tests.Recovery;
 
 namespace AiDesktopSetup.Tests.Protocol;
 
-public sealed class InteroperabilityTests
+public sealed class InteroperabilityTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task AcceptedStalledPeerCannotBlockTeardown(bool finishHandshake)
     {
-        var gateway = new NeutralGateway("/setup", "Example", "model", false);
+        await using var gateway = new NeutralGateway("/setup", "Example", "model", false, output.WriteLine);
         using var peer = new TcpClient();
         var origin = new Uri(gateway.Origin);
         await peer.ConnectAsync(origin.Host, origin.Port);
-        using var tls = new SslStream(peer.GetStream(), false, (_, _, _, _) => true);
+        using var tls = new SslStream(peer.GetStream(), false, (_, cert, _, _) => cert != null && cert.GetRawCertData().SequenceEqual(gateway.Certificate.RawData));
         if (finishHandshake) await tls.AuthenticateAsClientAsync("localhost");
         else await peer.GetStream().WriteAsync(new byte[] { 0x16 });
         // Wait for the accepted socket, not a listener backlog connection.
@@ -43,7 +43,7 @@ public sealed class InteroperabilityTests
     [InlineData("/nova/setup", "Nova Example", "nova-model", false)]
     public async Task TwoHttpsServicesUseSameCoordinatorAndConfiguration(string path, string brand, string model, bool assets)
     {
-        await using var gateway = new NeutralGateway(path, brand, model, assets);
+        await using var gateway = new NeutralGateway(path, brand, model, assets, output.WriteLine);
         using var scratch = new InteropScratch();
         using var clients = InteropClient.Clients(gateway.Origin, gateway.Certificate);
         var clock = new FixedClock();
@@ -92,8 +92,8 @@ public sealed class InteroperabilityTests
 
     [Fact] public async Task WrongCertificateAndPersistenceFailureNeverReachHttp()
     {
-        await using var gateway = new NeutralGateway("/setup", "TLS Example", "tls-model", false);
-        await using var other = new NeutralGateway("/other", "Other Example", "other-model", false);
+        await using var gateway = new NeutralGateway("/setup", "TLS Example", "tls-model", false, output.WriteLine);
+        await using var other = new NeutralGateway("/other", "Other Example", "other-model", false, output.WriteLine);
         using var wrong = InteropClient.Clients(gateway.Origin, other.Certificate);
         using var scratch = new InteropScratch();
         var clock = new FixedClock();
@@ -118,8 +118,8 @@ public sealed class InteroperabilityTests
     [InlineData("redirect")]
     public async Task HttpsFailuresRemainBoundedWithoutCredentialFallback(string fault)
     {
-        await using var gateway = new NeutralGateway("/setup", "Failure Example", "failure-model", false);
-        await using var target = new NeutralGateway("/other", "Redirect Example", "redirect-model", false);
+        await using var gateway = new NeutralGateway("/setup", "Failure Example", "failure-model", false, output.WriteLine);
+        await using var target = new NeutralGateway("/other", "Redirect Example", "redirect-model", false, output.WriteLine);
         using var scratch = new InteropScratch();
         using var clients = InteropClient.Clients(gateway.Origin, gateway.Certificate);
         var clock = new FixedClock(); var config = new InteropConfiguration(scratch.Root); var installer = new InteropInstaller();
@@ -146,7 +146,7 @@ public sealed class InteroperabilityTests
 
     [Fact] public async Task ChangedSnapshotOverHttpsCannotInstallOrWrite()
     {
-        await using var gateway = new NeutralGateway("/setup", "Immutable Example", "fixed-model", false);
+        await using var gateway = new NeutralGateway("/setup", "Immutable Example", "fixed-model", false, output.WriteLine);
         using var scratch = new InteropScratch(); using var clients = InteropClient.Clients(gateway.Origin, gateway.Certificate);
         var clock = new FixedClock(); var installer = new InteropInstaller(); var config = new InteropConfiguration(scratch.Root);
         var coordinator = new SetupCoordinator(InteropClient.Store(scratch.Root, clock), new SetupSessionClient(clients, _ => { }, clock), installer, config, clock, new("1.0.0", "x64"));
@@ -160,7 +160,7 @@ public sealed class InteroperabilityTests
 
     [Fact] public async Task ProtectedLogoFailureIsCosmeticExceptAuthorizationDenial()
     {
-        await using var gateway = new NeutralGateway("/setup", "Logo Example", "logo-model", true);
+        await using var gateway = new NeutralGateway("/setup", "Logo Example", "logo-model", true, output.WriteLine);
         using var scratch = new InteropScratch(); using var clients = InteropClient.Clients(gateway.Origin, gateway.Certificate);
         var clock = new FixedClock(); var sessions = new SetupSessionClient(clients, _ => { }, clock);
         var coordinator = new SetupCoordinator(InteropClient.Store(scratch.Root, clock), sessions, new InteropInstaller(), new InteropConfiguration(scratch.Root), clock, new("1.0.0", "x64"));
@@ -223,6 +223,8 @@ internal sealed class NeutralGateway : IAsyncDisposable
     private readonly TcpListener listener = new(IPAddress.Loopback, 0);
     private readonly CancellationTokenSource stop = new();
     private readonly Task server;
+    private Task? disposal;
+    private readonly Action<string> diagnostic;
     internal X509Certificate2 Certificate { get; }
     internal string Origin { get; }
     internal string Code { get; }
@@ -236,12 +238,13 @@ internal sealed class NeutralGateway : IAsyncDisposable
     private string state = "claimed";
     internal Func<string, (int Status, byte[] Body, string? Extra)?>? Fault;
     private static readonly byte[] Logo = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lZkAAAAASUVORK5CYII=");
-    internal NeutralGateway(string path, string brand, string model, bool assets)
+    internal NeutralGateway(string path, string brand, string model, bool assets, Action<string> diagnostic)
     {
-        this.path = path; this.brand = brand; this.model = model; this.assets = assets;
+        this.path = path; this.brand = brand; this.model = model; this.assets = assets; this.diagnostic = diagnostic;
         using var key = RSA.Create(2048);
         var request = new CertificateRequest("CN=127.0.0.1", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        Certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
+        using var generated = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddHours(1));
+        Certificate = HttpsFixture.ImportServerCertificate(generated);
         listener.Start(); Origin = "https://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port;
         Code = "AGSP1." + StrictJson.EncodeBase64Url(JsonSerializer.SerializeToUtf8Bytes(new { version = 1, installation_id = "fixture-install", setup_base_url = Origin + path, api_base_url = Origin + "/" + model + "/v1", app_id = "codex-desktop", service_name = brand, expires_at = "2030-01-01T00:10:00Z", credential = new { type = "setup_ticket", value = StrictJson.EncodeBase64Url(RandomNumberGenerator.GetBytes(32)) } }));
         server = Serve();
@@ -257,10 +260,12 @@ internal sealed class NeutralGateway : IAsyncDisposable
                 using var deadline = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
                 deadline.CancelAfter(TimeSpan.FromSeconds(5));
                 using var closeOnStop = deadline.Token.Register(connection.Dispose);
+                var stage = "TLS handshake";
                 try
                 {
                     using var tls = new SslStream(connection.GetStream());
                     await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = Certificate, EnabledSslProtocols = SslProtocols.Tls12 }, deadline.Token);
+                    stage = "HTTP request";
                     using var reader = new StreamReader(tls, Encoding.ASCII, false, 1024, true);
                     var line = await reader.ReadLineAsync(deadline.Token); if (line == null) continue;
                     Interlocked.Increment(ref Requests);
@@ -274,10 +279,11 @@ internal sealed class NeutralGateway : IAsyncDisposable
                     var reply = Reply(target, incoming, new string(requestBody));
                     var body = reply.Body;
                     var headers = Encoding.ASCII.GetBytes("HTTP/1.1 " + reply.Status + " Fixture\r\nCache-Control: no-store\r\nContent-Type: " + (target.EndsWith("/logo") && reply.Status == 200 ? "image/png" : "application/json") + "\r\nConnection: close\r\n" + reply.Extra + "Content-Length: " + (body.Length + (TruncateResponse ? 5 : 0)) + "\r\n\r\n");
+                    stage = "HTTP response";
                     await tls.WriteAsync(headers, deadline.Token); await tls.WriteAsync(body, deadline.Token); await tls.FlushAsync(deadline.Token);
                 }
-                catch (IOException) { }
-                catch (AuthenticationException) { }
+                catch (IOException e) { diagnostic(HttpsFixture.TransportFailure(stage, e)); }
+                catch (AuthenticationException e) { diagnostic(HttpsFixture.TransportFailure(stage, e)); }
                 catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
                 catch (ObjectDisposedException) when (deadline.IsCancellationRequested) { }
                 catch (SocketException) when (deadline.IsCancellationRequested) { }
@@ -321,6 +327,15 @@ internal sealed class NeutralGateway : IAsyncDisposable
         return (200, Encoding.UTF8.GetBytes(snapshot.ToJsonString()), null);
     }
     internal static (int Status, byte[] Body, string? Extra) Error(int status, string code, string? extra = null) => (status, JsonSerializer.SerializeToUtf8Bytes(new { error = new { code, request_id = "fixture" } }), extra);
-    public async ValueTask DisposeAsync() { stop.Cancel(); listener.Stop(); await server; Certificate.Dispose(); stop.Dispose(); }
+    public ValueTask DisposeAsync() => new(disposal ??= DisposeCore());
+    private async Task DisposeCore()
+    {
+        try { stop.Cancel(); listener.Stop(); await server; }
+        finally
+        {
+            try { Certificate.Dispose(); }
+            finally { stop.Dispose(); }
+        }
+    }
 }
 #endif

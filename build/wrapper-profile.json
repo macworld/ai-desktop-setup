@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "wrapper_sha256": "8d276b0310d38eed5911d0afdcd32b2c2e6561838121c91c953b5dc155364171",
+  "wrapper_sha256": "5dd86fdd1fc8b271f7754186eb27c9ae70868e69f008f31ca7f4ca35e1d2bce0",
   "nsis_version": "3.12",
   "nsis_source_commit": "e3f60402bcdf7be822d159b531c6e38ddf32de12",
   "architectures": {
