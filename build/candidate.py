@@ -116,10 +116,13 @@ def trx_report(path):
     row_counts = Counter(result_ids)
     for result in results:
         name, test_id = result.get('testName'), result.get('testId')
-        if row_counts[test_id] > 1:
-            matches = names[test_id] == method_names[test_id] and row_name(name, method_names[test_id])
+        if names[test_id] == method_names[test_id]:
+            # A canonical definition represents a Fact or runtime-enumerated
+            # theory, including a theory that produces only one row.
+            matches = row_name(name, method_names[test_id]) or (
+                row_counts[test_id] == 1 and name == method_names[test_id])
         else:
-            matches = names[test_id] == name
+            matches = row_counts[test_id] == 1 and names[test_id] == name
         if not matches:
             raise ValueError('Test identity mismatch')
     skipped, passed = [], 0

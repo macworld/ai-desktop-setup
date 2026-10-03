@@ -122,6 +122,22 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(result, dict(total=2, executed=2, passed=2,
             skipped=[], unverified_native_gates=[]))
 
+    def test_trx_accepts_single_runtime_theory_row_with_canonical_definition(self):
+        # Confirmed with the locked adapter for one MemberData value, both
+        # disabled discovery enumeration and an unserializable argument.
+        path = self.write_theory_trx()
+        tree = ET.parse(path)
+        results = next(n for n in tree.iter() if n.tag.endswith('Results'))
+        entries = next(n for n in tree.iter() if n.tag.endswith('TestEntries'))
+        counters = next(n for n in tree.iter() if n.tag.endswith('Counters'))
+        results.remove(results[1])
+        entries.remove(entries[1])
+        for key in ('total', 'executed', 'passed'):
+            counters.set(key, '1')
+        tree.write(path)
+        self.assertEqual(self.module().trx_report(path), dict(total=1,
+            executed=1, passed=1, skipped=[], unverified_native_gates=[]))
+
     def test_trx_rejects_failed_skipped_or_unknown_runtime_theory_row(self):
         for outcome in ('Failed', 'NotExecuted', 'Unknown'):
             with self.subTest(outcome=outcome):
@@ -163,7 +179,7 @@ class CandidateTests(unittest.TestCase):
 
     def test_trx_rejects_theory_name_method_or_definition_mismatch(self):
         for mutation in ('wrong-row-name', 'duplicate-row-name', 'wrong-method-class',
-                         'missing-method-name', 'duplicate-definition'):
+                         'missing-method-name', 'parameterized-shared-definition', 'duplicate-definition'):
             with self.subTest(mutation=mutation):
                 path = self.write_theory_trx()
                 tree = ET.parse(path)
@@ -178,6 +194,8 @@ class CandidateTests(unittest.TestCase):
                     method.set('className', 'Fixture.Other')
                 elif mutation == 'missing-method-name':
                     del method.attrib['name']
+                elif mutation == 'parameterized-shared-definition':
+                    definitions[0].set('name', results[0].get('testName'))
                 else:
                     definitions.append(ET.fromstring(ET.tostring(definitions[0])))
                 tree.write(path)
