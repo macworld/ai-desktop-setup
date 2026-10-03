@@ -122,6 +122,7 @@ def main() -> None:
         subprocess.run([
             args.makensis, ("/NOCONFIG" if os.name == "nt" else "-NOCONFIG"),
             ("/V2" if os.name == "nt" else "-V2"),
+            ("/INPUTCHARSET" if os.name == "nt" else "-INPUTCHARSET"), "UTF8",
             *[("/D" if os.name == "nt" else "-D") + value for value in
               (f"PAYLOAD_DIR={payload}", f"OUTPUT_FILE={target}", f"VERSION={version}", f"ARCH={architecture}")],
             str(root / "packaging/launcher.nsi"),

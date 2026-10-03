@@ -110,7 +110,7 @@ Section
 !ifdef PAYLOAD_INCLUDE
   !include "${PAYLOAD_INCLUDE}"
 !else
-  File /r "${PAYLOAD_DIR}/*"
+  File /r "${PAYLOAD_DIR}\*"
 !endif
   IfErrors preparation_failed
   ; Keep the complete payload, including .exe.config and DLLs, alive until the

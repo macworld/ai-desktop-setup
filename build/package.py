@@ -80,9 +80,9 @@ def package(payload,architecture,version,output,makensis,verification=None):
         lines=['SetDateSave off']
         for item in entries:
             name=item['path'];parent=Path(name).parent.as_posix();dest='$PayloadPath'+('\\'+parent.replace('/','\\') if parent!='.' else '')
-            lines.extend([f'SetOutPath "{dest}"',f'File "{payload.as_posix()}/{name}"'])
+            lines.extend([f'SetOutPath "{dest}"',f'File "{payload / name}"'])
         include.write_text('\n'.join(lines)+'\n',encoding='utf-8')
-        subprocess.run([makensis,prefix+'NOCONFIG',prefix+'V2',*[prefix+'D'+x for x in (f'PAYLOAD_DIR={payload}',f'PAYLOAD_INCLUDE={include}',f'OUTPUT_FILE={output}',f'VERSION={version}',f'ARCH={architecture}')],str(ROOT/'packaging/launcher.nsi')],check=True)
+        subprocess.run([makensis,prefix+'NOCONFIG',prefix+'V2',prefix+'INPUTCHARSET','UTF8',*[prefix+'D'+x for x in (f'PAYLOAD_DIR={payload}',f'PAYLOAD_INCLUDE={include}',f'OUTPUT_FILE={output}',f'VERSION={version}',f'ARCH={architecture}')],str(ROOT/'packaging/launcher.nsi')],check=True)
     return entries
 
 

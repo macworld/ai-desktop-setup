@@ -72,7 +72,7 @@ class WrapperContractTests(NsisTests):
         for name in sorted(expected):
             p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(expected[name])
             parent=Path(name).parent.as_posix();dest='$PayloadPath'+('\\'+parent.replace('/','\\') if parent!='.' else '')
-            include.extend([f'SetOutPath "{dest}"',f'File "{p.as_posix()}"'])
+            include.extend([f'SetOutPath "{dest}"',f'File "{p}"'])
         inc=self.root/'payload.nsh';inc.write_text('\n'.join(include)+'\n',encoding='utf-8')
         wrapper=root/'packaging/launcher.nsi'
         if alter:
@@ -80,7 +80,7 @@ class WrapperContractTests(NsisTests):
             source=source.replace('StrCpy $PayloadPath "$PLUGINSDIR\\app"',alter)
             wrapper=self.root/'changed.nsi';wrapper.write_text(source,encoding='utf-8')
         target=self.root/(architecture+'.exe');prefix='/' if os.name=='nt' else '-'
-        self.run_compiler([self.compiler,prefix+'NOCONFIG',prefix+'V1',*[prefix+'D'+x for x in ('PAYLOAD_DIR='+str(self.root),'PAYLOAD_INCLUDE='+str(inc),'OUTPUT_FILE='+str(target),'VERSION=1.2.3','ARCH='+architecture)],str(wrapper)])
+        self.run_compiler([self.compiler,prefix+'NOCONFIG',prefix+'V1',prefix+'INPUTCHARSET','UTF8',*[prefix+'D'+x for x in ('PAYLOAD_DIR='+str(self.root),'PAYLOAD_INCLUDE='+str(inc),'OUTPUT_FILE='+str(target),'VERSION=1.2.3','ARCH='+architecture)],str(wrapper)])
         return self.m.decode(target.read_bytes()),expected
 
     def test_both_architectures_extract_complete_exact_bytes(self):
@@ -89,6 +89,17 @@ class WrapperContractTests(NsisTests):
             actual,plugins=self.m.verify_payload(d,expected,arch)
             self.assertEqual(actual,expected);self.assertEqual(len(actual),22)
             self.assertEqual(plugins[0]['ownership'],'third_party')
+
+    def test_wrapper_profile_is_preserved_under_ansi_compiler_default(self):
+        native_run=self.run_compiler
+        prefix='/' if os.name=='nt' else '-'
+        def ansi_default(arguments,**kwargs):
+            native_run([arguments[0],prefix+'INPUTCHARSET','CP1252',*arguments[1:]],**kwargs)
+        self.run_compiler=ansi_default
+        for architecture in ('x64','arm64'):
+            decoded,expected=self.wrapper(architecture)
+            actual,_=self.m.verify_payload(decoded,expected,architecture)
+            self.assertEqual(actual,expected)
 
     def test_changed_payload_missing_extra_or_unclassified_records_rejected(self):
         import copy
