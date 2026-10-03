@@ -22,7 +22,8 @@ public sealed record InstallHelperRequest(string PackagePath,string? LicensePath
     }
     public string ToWire()
     {
-        Validate();var wire=System.Text.Json.JsonSerializer.Serialize(this);
+        Validate();
+        var wire = System.Text.Json.JsonSerializer.Serialize(this);
         if(System.Text.Encoding.UTF8.GetByteCount(wire)>16384) throw new SetupException("Installation request exceeds its limit.");
         return wire;
     }
@@ -30,16 +31,24 @@ public sealed record InstallHelperRequest(string PackagePath,string? LicensePath
     {
         try
         {
-            using var doc=System.Text.Json.JsonDocument.Parse(bytes);
-            var names=new HashSet<string>(StringComparer.Ordinal);
-            var allowed=new[]{"PackagePath","LicensePath","PackageSha256","LicenseSha256","AppId","Operation"};
-            foreach (var p in doc.RootElement.EnumerateObject())
-                if (!allowed.Contains(p.Name,StringComparer.Ordinal) || !names.Add(p.Name)) throw new SetupException("Invalid installation request.");
-            if (names.Count!=allowed.Length) throw new SetupException("Invalid installation request.");
-            var request=System.Text.Json.JsonSerializer.Deserialize<InstallHelperRequest>(bytes) ?? throw new SetupException("Invalid installation request.");
-            request.Validate();return request;
+            using var doc = System.Text.Json.JsonDocument.Parse(bytes);
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            var allowed = new[] { "PackagePath", "LicensePath", "PackageSha256", "LicenseSha256", "AppId", "Operation" };
+            foreach (var property in doc.RootElement.EnumerateObject())
+            {
+                if (!allowed.Contains(property.Name, StringComparer.Ordinal) || !names.Add(property.Name))
+                    throw new SetupException("Invalid installation request.");
+            }
+            if (names.Count != allowed.Length) throw new SetupException("Invalid installation request.");
+            var request = System.Text.Json.JsonSerializer.Deserialize<InstallHelperRequest>(bytes)
+                ?? throw new SetupException("Invalid installation request.");
+            request.Validate();
+            return request;
         }
-        catch (Exception error) when (error is System.Text.Json.JsonException or InvalidOperationException or ArgumentException) { throw new SetupException("Invalid installation request."); }
+        catch (Exception error) when (error is System.Text.Json.JsonException or InvalidOperationException or ArgumentException)
+        {
+            throw new SetupException("Invalid installation request.");
+        }
     }
     public override string ToString()=>"[installation artifacts]";
 }

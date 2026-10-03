@@ -5,12 +5,15 @@
     <TextBlock Text="Paste setup code → Confirm service → Install and configure → Complete" TextWrapping="Wrap" Margin="0,0,0,20" />
     <TextBlock Text="Setup code (kept private on this Windows account)" />
     <DockPanel Margin="0,6,0,12"><Button x:Name="PasteButton" Content="Paste and preview" Click="PasteClick" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0"/><PasswordBox x:Name="CodeBox" Padding="6" PasswordChanged="CodeChanged" /></DockPanel>
+    <TextBlock Text="Accepted setup codes are cleared from the live clipboard if it still matches. Windows clipboard history and cloud copies may remain." TextWrapping="Wrap" Margin="0,0,0,8" />
     <Button x:Name="PreviewButton" Content="Preview typed code" Click="PreviewClick" HorizontalAlignment="Left" Padding="12,6" />
     <TextBlock x:Name="PreviewText" TextWrapping="Wrap" Margin="0,12" />
     <Button x:Name="AuthenticateButton" Content="Confirm addresses and authenticate" Click="AuthenticateClick" IsEnabled="False" HorizontalAlignment="Left" Padding="12,6" />
     <DockPanel Margin="0,12"><Image x:Name="ServiceLogo" Width="48" Height="48" DockPanel.Dock="Left" Margin="0,0,12,0"/><TextBlock x:Name="ServiceText" TextWrapping="Wrap" VerticalAlignment="Center" /></DockPanel>
     <TextBlock Text="Install and configure may request administrator permission to install the official desktop client, and will back up and update this account’s Codex configuration." TextWrapping="Wrap" Margin="0,0,0,12" />
     <StackPanel Orientation="Horizontal"><Button x:Name="InstallButton" Content="Install and configure" Click="InstallClick" IsEnabled="False" Padding="12,6"/><Button x:Name="HelpButton" Content="Service help" Click="HelpClick" IsEnabled="False" Padding="12,6" Margin="10,0,0,0" /></StackPanel>
+    <Button x:Name="OfficialRetryButton" Content="Retry with a fresh official download" Click="OfficialRetryClick" IsEnabled="False" HorizontalAlignment="Left" Padding="12,6" Margin="0,10,0,0" />
+    <TextBlock Text="This explicit retry uses the official source and verifies the package again. Ordinary retry keeps the service’s selected source." TextWrapping="Wrap" Margin="0,6,0,0" />
     <TextBlock Text="Interrupted setup on this account" Margin="0,20,0,6" />
     <DockPanel><Button x:Name="ResumeButton" Content="Resume installation / retry receipt" Click="ResumeClick" DockPanel.Dock="Right" Padding="12,6" Margin="10,0,0,0"/><ComboBox x:Name="RecoveryList" MinWidth="220" SelectionChanged="RecoverySelectionChanged" /></DockPanel>
     <ProgressBar x:Name="Progress" Height="6" Margin="0,18,0,12" Minimum="0" Maximum="100" />

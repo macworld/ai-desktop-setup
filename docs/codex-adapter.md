@@ -76,8 +76,11 @@ and SYSTEM. These ACLs and locked-handle behavior require native cross-account t
 
 Package and license transport uses ProtocolHttpClients' anonymous pool with no
 cookies, default credentials, bearer/proof headers, decompression, or redirects.
-No automatic fallback occurs. After mirror failure the workflow may offer an
-explicit official-source retry using `CodexOfficialPolicy.Official(plan.Policy)`.
+No automatic fallback occurs. The window offers “Retry with a fresh official download” for the selected
+authenticated or saved session. `SetupCoordinator.RetryOfficialAsync` rechecks
+authorization and passes the one-attempt official choice through the desktop
+adapter. It downloads and verifies fresh official bytes, without changing the
+session snapshot. Ordinary install/resume still uses the snapshot mirror.
 Current policy permits no redirects even for official sources; update the adapter
 explicitly if the official distribution changes.
 

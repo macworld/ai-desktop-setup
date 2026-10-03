@@ -19,6 +19,26 @@ namespace AiDesktopSetup.Tests.Protocol;
 public sealed class InteroperabilityTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AcceptedStalledPeerCannotBlockTeardown(bool finishHandshake)
+    {
+        var gateway = new NeutralGateway("/setup", "Example", "model", false);
+        using var peer = new TcpClient();
+        var origin = new Uri(gateway.Origin);
+        await peer.ConnectAsync(origin.Host, origin.Port);
+        using var tls = new SslStream(peer.GetStream(), false, (_, _, _, _) => true);
+        if (finishHandshake) await tls.AuthenticateAsClientAsync("localhost");
+        else await peer.GetStream().WriteAsync(new byte[] { 0x16 });
+        // Wait for the accepted socket, not a listener backlog connection.
+        for (var i = 0; i < 100 && gateway.AcceptedConnections == 0; i++) await Task.Delay(10);
+        Assert.Equal(1, gateway.AcceptedConnections);
+        var disposing = gateway.DisposeAsync().AsTask();
+        try { Assert.Same(disposing, await Task.WhenAny(disposing, Task.Delay(TimeSpan.FromSeconds(2)))); }
+        finally { peer.Dispose(); await disposing; }
+    }
+
+    [Theory]
     [InlineData("/Orion/Setup", "Orion Example", "orion-model", true)]
     [InlineData("/nova/setup", "Nova Example", "nova-model", false)]
     public async Task TwoHttpsServicesUseSameCoordinatorAndConfiguration(string path, string brand, string model, bool assets)
@@ -184,7 +204,7 @@ internal sealed class InteropInstaller : ISetupInstaller
     internal int Calls;
     internal Func<Task>? OnInstall;
     public Task<InstallState> InspectAsync(CancellationToken ct) => Task.FromResult(new InstallState(true));
-    public async Task<InstallState> InstallAsync(ValidatedSession session, IProgress<SetupProgress>? progress, CancellationToken ct)
+    public async Task<InstallState> InstallAsync(ValidatedSession session, IProgress<SetupProgress>? progress, CancellationToken ct, PackageSource source = PackageSource.Session)
     { Calls++; if (OnInstall != null) await OnInstall(); return new(true); }
 }
 internal sealed class InteropConfiguration(string root) : ISetupConfiguration
@@ -208,6 +228,7 @@ internal sealed class NeutralGateway : IAsyncDisposable
     internal string Code { get; }
     internal string Key { get; } = "fixture_" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     internal int Requests, ConfigurationReads, Downloads, DownloadSecretHeaders;
+    internal int AcceptedConnections;
     internal bool TruncateResponse;
     private readonly string path, brand, model;
     private readonly bool assets;
@@ -232,30 +253,39 @@ internal sealed class NeutralGateway : IAsyncDisposable
             while (!stop.IsCancellationRequested)
             {
                 using var connection = await listener.AcceptTcpClientAsync(stop.Token);
-                using var tls = new SslStream(connection.GetStream());
+                Interlocked.Increment(ref AcceptedConnections);
+                using var deadline = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+                deadline.CancelAfter(TimeSpan.FromSeconds(5));
+                using var closeOnStop = deadline.Token.Register(connection.Dispose);
                 try
                 {
-                    await tls.AuthenticateAsServerAsync(Certificate, false, SslProtocols.Tls12, false);
+                    using var tls = new SslStream(connection.GetStream());
+                    await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = Certificate, EnabledSslProtocols = SslProtocols.Tls12 }, deadline.Token);
                     using var reader = new StreamReader(tls, Encoding.ASCII, false, 1024, true);
-                    var line = await reader.ReadLineAsync(); if (line == null) continue;
+                    var line = await reader.ReadLineAsync(deadline.Token); if (line == null) continue;
                     Interlocked.Increment(ref Requests);
                     var target = line.Split(' ')[1];
                     var incoming = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync())) { var split = line.IndexOf(':'); incoming[line.Substring(0, split)] = line.Substring(split + 1).Trim(); }
+                    while (!string.IsNullOrEmpty(line = await reader.ReadLineAsync(deadline.Token))) { var split = line.IndexOf(':'); incoming[line.Substring(0, split)] = line.Substring(split + 1).Trim(); }
                     var length = incoming.TryGetValue("Content-Length", out var value) ? int.Parse(value) : 0;
                     if (length > 16384) throw new IOException("Fixture request too large");
                     var requestBody = new char[length];
-                    if (length > 0) await reader.ReadBlockAsync(requestBody, 0, length);
+                    if (length > 0) await reader.ReadBlockAsync(requestBody.AsMemory(), deadline.Token);
                     var reply = Reply(target, incoming, new string(requestBody));
                     var body = reply.Body;
                     var headers = Encoding.ASCII.GetBytes("HTTP/1.1 " + reply.Status + " Fixture\r\nCache-Control: no-store\r\nContent-Type: " + (target.EndsWith("/logo") && reply.Status == 200 ? "image/png" : "application/json") + "\r\nConnection: close\r\n" + reply.Extra + "Content-Length: " + (body.Length + (TruncateResponse ? 5 : 0)) + "\r\n\r\n");
-                    await tls.WriteAsync(headers); await tls.WriteAsync(body); await tls.FlushAsync();
+                    await tls.WriteAsync(headers, deadline.Token); await tls.WriteAsync(body, deadline.Token); await tls.FlushAsync(deadline.Token);
                 }
                 catch (IOException) { }
                 catch (AuthenticationException) { }
+                catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
+                catch (ObjectDisposedException) when (deadline.IsCancellationRequested) { }
+                catch (SocketException) when (deadline.IsCancellationRequested) { }
             }
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+        catch (SocketException) when (stop.IsCancellationRequested) { }
+        catch (ObjectDisposedException) when (stop.IsCancellationRequested) { }
     }
     private (int Status, byte[] Body, string? Extra) Reply(string target, Dictionary<string, string> headers, string body)
     {

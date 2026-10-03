@@ -26,7 +26,8 @@
     <Using Include="Xunit" /><Using Include="System.IO" /><Using Include="System.Net.Http" />
     <Compile Include="../*.cs" Link="Shared/%(Filename)%(Extension)" />
     <Compile Include="../Protocol/**/*.cs;../Recovery/**/*.cs;../Workflow/**/*.cs" Exclude="**/obj/**/*.cs;**/bin/**/*.cs" Link="Shared/%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="NativeHostTests.cs;NativeLogoTests.cs;NativeTrustProviderTests.cs" />
+    <Compile Include="NativeHostTests.cs;NativeLogoTests.cs;NativeTrustProviderTests.cs;NativeSetupPasteTests.cs" />
+    <Compile Include="../../App/SetupCodePaste.cs" Link="App/SetupCodePaste.cs" />
     <Compile Include="../../App/BoundedLogoDecoder.cs" Link="App/BoundedLogoDecoder.cs" />
     <None Include="../../protocol/vectors.json" Link="vectors.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

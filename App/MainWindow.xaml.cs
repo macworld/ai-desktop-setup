@@ -16,7 +16,8 @@ public partial class MainWindow : Window
     private SetupPreview? preview;
     private AuthenticatedSetup? setup;
     private ResumeId? active;
-    private string? pastedCode, help;
+    private string? help;
+    private readonly SetupCodePaste codePaste;
     private CancellationTokenSource? operation;
     private Task? running;
     private bool closing, closed;
@@ -30,6 +31,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrWhiteSpace(home)) home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
         coordinator = new(store, sessions, new DesktopSetupInstaller(), new DesktopSetupConfiguration(home!), clock,
             new(typeof(MainWindow).Assembly.GetName().Version!.ToString(), RuntimeCompat.OsArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "x64"));
+        codePaste = new(CodeBox, PreviewCode, Clipboard.GetText, Clipboard.Clear);
         Loaded += async (_, _) => await Execute(async ct => { await coordinator.CleanupAsync(ct); RefreshRecovery(); });
         Closed += (_, _) => clients.Dispose();
     }
@@ -43,7 +45,7 @@ public partial class MainWindow : Window
     private void PreviewClick(object sender, RoutedEventArgs e) => PreviewCode();
     private void PasteClick(object sender, RoutedEventArgs e)
     {
-        try { pastedCode = Clipboard.GetText(); CodeBox.Password = pastedCode; PreviewCode(); }
+        try { codePaste.PasteFromClipboard(); }
         catch (Exception) { StatusText.Text = "Clipboard unavailable. Paste or type the code in the field."; }
     }
     private void PreviewCode()
@@ -82,6 +84,13 @@ public partial class MainWindow : Window
         if (RecoveryList.SelectedItem is not ResumeId id) return;
         active = id; ShowOutcome(await coordinator.ResumeAsync(id, ct));
     });
+    private async void OfficialRetryClick(object sender, RoutedEventArgs e) => await Execute(async ct =>
+    {
+        var id = RecoveryList.SelectedItem is ResumeId selected ? selected : active;
+        if (!id.HasValue) return;
+        active = id;
+        ShowOutcome(await coordinator.RetryOfficialAsync(id.Value, new Progress<SetupProgress>(p => StatusText.Text = p.Message), ct));
+    });
     private void ShowOutcome(SetupOutcome result)
     {
         StatusText.Text = result.LocalState == SetupLocalState.Completed ? "Configuration is complete." : "Installation is not yet registered for this account; configuration has not been written.";
@@ -101,18 +110,20 @@ public partial class MainWindow : Window
         catch (ProtocolHttpException error) { SetupDiagnostics.Current.RecordProtocolFailure(error.Error); StatusText.Text = "Service request failed: " + error.Error.Code + (error.RetryAfter.HasValue ? ". Retry after " + Math.Ceiling(error.RetryAfter.Value.TotalSeconds) + " seconds." : ". You can retry or clear recovery."); }
         catch (PackageTrustException error) { StatusText.Text = error.Retryable ? "Package trust could not be verified. Retry when verification is available." : "Package trust verification failed. Installation is blocked."; }
         catch (Exception) { StatusText.Text = "Setup could not continue. Recovery was retained. Retry, or cancel to clear recovery; existing files and private backups are preserved."; }
-        finally { operation.Dispose(); operation = null; running = null; Progress.IsIndeterminate = false; SetBusy(false); RefreshRecovery(); }
+        finally { ClearClipboard(); operation.Dispose(); operation = null; running = null; Progress.IsIndeterminate = false; SetBusy(false); RefreshRecovery(); }
     }
     private void SetBusy(bool busy)
     {
         PasteButton.IsEnabled = PreviewButton.IsEnabled = CodeBox.IsEnabled = ResumeButton.IsEnabled = RecoveryList.IsEnabled = !busy;
         AuthenticateButton.IsEnabled = !busy && preview != null; InstallButton.IsEnabled = !busy && setup != null;
         HelpButton.IsEnabled = !busy && help != null;
+        OfficialRetryButton.IsEnabled = !busy && (active.HasValue || RecoveryList.SelectedItem is ResumeId);
         if (busy) LaunchButton.IsEnabled = false;
     }
     private void RecoverySelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         if (operation != null || RecoveryList.SelectedItem is not ResumeId id) return;
+        OfficialRetryButton.IsEnabled = true;
         try
         {
             var record = store.Load(id); if (record == null) return;
@@ -142,7 +153,7 @@ public partial class MainWindow : Window
         catch { StatusText.Text = "Unable to clear recovery on exit. Retry after private storage becomes available."; }
         finally { closing = false; }
     }
-    private void ClearClipboard() { try { if (pastedCode != null && Clipboard.GetText() == pastedCode) Clipboard.Clear(); } catch { } pastedCode = null; }
+    private void ClearClipboard() => codePaste.TryClear();
     private static string? SafeHelp(string? value) => value != null && Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Query.Length == 0 && uri.Fragment.Length == 0 ? value : null;
     private void HelpClick(object sender, RoutedEventArgs e) { if (help != null) Process.Start(new ProcessStartInfo(help) { UseShellExecute = true }); }
     private void LaunchClick(object sender, RoutedEventArgs e) { try { CodexLauncher.Open(); } catch { StatusText.Text = "The client is not ready for this account. Open it from the Start menu after any requested restart or sign-in."; } }

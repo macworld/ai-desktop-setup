@@ -1,13 +1,14 @@
 using AiDesktopSetup.Core.Protocol;
 using AiDesktopSetup.Core.Recovery;
 namespace AiDesktopSetup.Core.Workflow;
+public enum PackageSource { Session, Official }
 public enum SetupLocalState { Completed, Incomplete, Canceled }
 public enum ReceiptState { None, Pending, Acknowledged }
 public sealed record SetupOutcome(SetupLocalState LocalState, ReceiptState ReceiptState, bool NeedsRestart, bool NeedsSignOut, bool CanLaunch);
 public interface ISetupInstaller
 {
     Task<InstallState> InspectAsync(CancellationToken ct);
-    Task<InstallState> InstallAsync(ValidatedSession session, IProgress<SetupProgress>? progress, CancellationToken ct);
+    Task<InstallState> InstallAsync(ValidatedSession session, IProgress<SetupProgress>? progress, CancellationToken ct, PackageSource source = PackageSource.Session);
 }
 public interface ISetupConfiguration
 {
@@ -68,7 +69,14 @@ public sealed class SetupCoordinator
         try { Cleanup(); return await Run(id, null, ct).ConfigureAwait(false); }
         finally { Gate.Release(); }
     }
-    private async Task<SetupOutcome> Run(ResumeId id, IProgress<SetupProgress>? progress, CancellationToken ct)
+    /// <summary>One user-selected attempt; does not change the authenticated snapshot or future ordinary retries.</summary>
+    public async Task<SetupOutcome> RetryOfficialAsync(ResumeId id, IProgress<SetupProgress>? progress, CancellationToken ct)
+    {
+        await Gate.WaitAsync(ct).ConfigureAwait(false);
+        try { Cleanup(); return await Run(id, progress, ct, PackageSource.Official).ConfigureAwait(false); }
+        finally { Gate.Release(); }
+    }
+    private async Task<SetupOutcome> Run(ResumeId id, IProgress<SetupProgress>? progress, CancellationToken ct, PackageSource source = PackageSource.Session)
     {
         var setup = await Authorize(Load(id), ct).ConfigureAwait(false);
         var record = Load(id);
@@ -80,7 +88,7 @@ public sealed class SetupCoordinator
         if (journal == ConfigurationRecoveryState.None)
         {
             progress?.Report(new("install", "Installing or checking the official desktop client…"));
-            state = await installer.InstallAsync(setup.Session, progress, ct).ConfigureAwait(false);
+            state = await installer.InstallAsync(setup.Session, progress, ct, source).ConfigureAwait(false);
             record = Load(id).WithInstallation(state); store.Save(record);
             if (!state.Installed) return Outcome(SetupLocalState.Incomplete, ReceiptState.None, state);
             record = record.Advance(LocalStage.Installed); store.Save(record);

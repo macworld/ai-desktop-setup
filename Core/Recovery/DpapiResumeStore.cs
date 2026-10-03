@@ -97,20 +97,41 @@ public sealed class DpapiResumeStore : IResumeStore
     {
         Validate(record);
         if (creating && RuntimeCompat.PathExists(RecordPath(record.Claim.ResumeId))) throw new IOException("Resume identifier collision.");
-        var data = new Dictionary<string, object> { ["version"] = 1, ["resume_id"] = record.Claim.ResumeId.Value.ToString("D"), ["claim_id"] = record.Claim.ClaimId.ToString("D"), ["resume_secret"] = record.Claim.ResumeSecret.ToBearer(), ["code"] = record.Code.OriginalCode, ["created_at"] = record.CreatedAt.UtcDateTime.ToString("O"), ["expires_at"] = record.ExpiresAt.UtcDateTime.ToString("O"), ["local_stage"] = record.LocalStage.ToString() };
+        var data = new Dictionary<string, object>
+        {
+            ["version"] = 1,
+            ["resume_id"] = record.Claim.ResumeId.Value.ToString("D"),
+            ["claim_id"] = record.Claim.ClaimId.ToString("D"),
+            ["resume_secret"] = record.Claim.ResumeSecret.ToBearer(),
+            ["code"] = record.Code.OriginalCode,
+            ["created_at"] = record.CreatedAt.UtcDateTime.ToString("O"),
+            ["expires_at"] = record.ExpiresAt.UtcDateTime.ToString("O"),
+            ["local_stage"] = record.LocalStage.ToString()
+        };
         if (record.Snapshot != null) data["snapshot"] = record.Snapshot.ToWire();
         if (record.Installation != null) data["installation"] = record.Installation;
-        var plain = JsonSerializer.SerializeToUtf8Bytes(data); byte[] encrypted;
+        var plain = JsonSerializer.SerializeToUtf8Bytes(data);
+        byte[] encrypted;
         try
         {
             if (plain.Length > MaximumPlainRecordBytes) throw new IOException("Resume record is too large.");
             encrypted = protection.Protect(plain);
         }
-        finally { Array.Clear(plain, 0, plain.Length); }
+        finally
+        {
+            Array.Clear(plain, 0, plain.Length);
+        }
         if (encrypted.Length > MaximumProtectedRecordBytes) throw new IOException("Resume record is too large.");
         var temp = Path.Combine(root, Guid.NewGuid().ToString("N") + ".tmp");
-        try { ResumeFileSecurity.WriteNew(temp, encrypted); ResumeFileSecurity.AtomicReplace(temp, RecordPath(record.Claim.ResumeId)); }
-        finally { if (File.Exists(temp)) File.Delete(temp); }
+        try
+        {
+            ResumeFileSecurity.WriteNew(temp, encrypted);
+            ResumeFileSecurity.AtomicReplace(temp, RecordPath(record.Claim.ResumeId));
+        }
+        finally
+        {
+            if (File.Exists(temp)) File.Delete(temp);
+        }
     }
     private Guid NewUuid()
     { var bytes = random.GetBytes(16); if (bytes.Length != 16) throw new ProtocolException(); bytes[7] = (byte)((bytes[7] & 15) | 64); bytes[8] = (byte)((bytes[8] & 63) | 128); return new Guid(bytes); }

@@ -125,26 +125,46 @@ public sealed class PreparedInstallation : IDisposable
 
 internal sealed class WindowsPackageSignatureTrust : IPackageSignatureTrust
 {
-    public void Verify(string path,FileStream file)
+    public void Verify(string path, FileStream file)
     {
         if (!RuntimeCompat.IsWindows) throw new PackageTrustException(unchecked((int)0x800B0001));
-        var action=new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE"); // WINTRUST_ACTION_GENERIC_VERIFY_V2, app-package aware
-        var info=new TrustFile { Size=(uint)Marshal.SizeOf<TrustFile>(),Path=path,File=file.SafeFileHandle.DangerousGetHandle() };
-        var pointer=Marshal.AllocHGlobal(Marshal.SizeOf<TrustFile>());
-        var data=new TrustData { Size=(uint)Marshal.SizeOf<TrustData>(),Ui=2,Revocation=1,Choice=1,Info=pointer,StateAction=1,
-            Flags=0x80|0x2000 }; // CHAIN_EXCLUDE_ROOT, disable MD2/MD4. Online retrieval allowed; no lifetime-signing flag.
+        // WINTRUST_ACTION_GENERIC_VERIFY_V2, app-package aware.
+        var action = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
+        var info = new TrustFile
+        {
+            Size = (uint)Marshal.SizeOf<TrustFile>(),
+            Path = path,
+            File = file.SafeFileHandle.DangerousGetHandle()
+        };
+        var pointer = Marshal.AllocHGlobal(Marshal.SizeOf<TrustFile>());
+        var data = new TrustData
+        {
+            Size = (uint)Marshal.SizeOf<TrustData>(),
+            Ui = 2,
+            Revocation = 1,
+            Choice = 1,
+            Info = pointer,
+            StateAction = 1,
+            // CHAIN_EXCLUDE_ROOT, disable MD2/MD4. Online retrieval allowed; no lifetime-signing flag.
+            Flags = 0x80 | 0x2000
+        };
         try
         {
-            Marshal.StructureToPtr(info,pointer,false);
-            var status=WinVerifyTrust(new IntPtr(-1),ref action,ref data);
-            if (status!=0) throw new PackageTrustException(status); // LONG: only zero succeeds.
+            Marshal.StructureToPtr(info, pointer, false);
+            var status = WinVerifyTrust(new IntPtr(-1), ref action, ref data);
+            if (status != 0) throw new PackageTrustException(status); // LONG: only zero succeeds.
         }
         finally
         {
             // CLOSE is mandatory even when VERIFY fails. Do not retry with weaker revocation flags.
-            data.StateAction=2;
-            try { WinVerifyTrust(new IntPtr(-1),ref action,ref data); }
-            finally { Marshal.DestroyStructure<TrustFile>(pointer);Marshal.FreeHGlobal(pointer);GC.KeepAlive(file); }
+            data.StateAction = 2;
+            try { WinVerifyTrust(new IntPtr(-1), ref action, ref data); }
+            finally
+            {
+                Marshal.DestroyStructure<TrustFile>(pointer);
+                Marshal.FreeHGlobal(pointer);
+                GC.KeepAlive(file);
+            }
         }
     }
     [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)] private struct TrustFile

@@ -68,5 +68,6 @@ Recovery behavior:
 - Protected artwork is screened before actual WPF decoding and bounded pixel
   allocation. Cosmetic decode failures use the neutral fallback; authorization
   rejection still blocks continuation. Help opens only on a click and excludes
-  query/fragment parameters. Clipboard cleanup occurs only if it still contains
+  query/fragment parameters. Both the Paste button and native PasswordBox paste perform prompt accepted-code
+  cleanup. Clipboard cleanup occurs only if it still contains
   the code pasted by this operation.

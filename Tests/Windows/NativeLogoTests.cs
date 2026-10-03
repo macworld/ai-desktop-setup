@@ -25,10 +25,16 @@ public sealed class NativeLogoTests
     [Theory] [InlineData(true)] [InlineData(false)]
     public void RejectsOversizeAndTruncatedPixels(bool png)
     {
-        Assert.ThrowsAny<Exception>(() => BoundedLogoDecoder.Decode(Encode(png, 1025, 1)));
+        var oversize = Encode(png, 1025, 1); // Fixture creation must succeed outside the rejection assertion.
+        Assert.Throws<InvalidDataException>(() => BoundedLogoDecoder.Decode(oversize));
         var bytes = Encode(png, 32, 32);
-        Assert.ThrowsAny<Exception>(() => BoundedLogoDecoder.Decode(bytes.Take(png ? 33 : 20).ToArray()));
-        Assert.ThrowsAny<Exception>(() => BoundedLogoDecoder.Decode(new byte[524289]));
+        var truncated = bytes.Take(png ? 33 : 20).ToArray();
+        var error = Record.Exception(() => BoundedLogoDecoder.Decode(truncated));
+        // The bounded header check or WIC may reject truncated pixels. Encoder,
+        // allocation, threading and unrelated failures are never accepted here.
+        Assert.True(error is InvalidDataException or FileFormatException or NotSupportedException,
+            "Expected bounded-header or WIC format rejection, got " + error?.GetType().FullName);
+        Assert.Throws<InvalidDataException>(() => BoundedLogoDecoder.Decode(new byte[524289]));
     }
     private static byte[] Encode(bool png, int width, int height)
     {
