@@ -6,10 +6,12 @@ EXE when it is no longer needed. The official desktop client installed by the
 assistant is separate: remove it through Windows Settings → Apps if desired.
 
 Configuration changes are transactional and preserve a backup of the previous
-account configuration. On interruption, reopen the same assistant and use its
-recovery selection and resume action. A committed configuration retries its
-completion receipt instead of writing the credentials again. Cancel clears pending
-recovery; it does not uninstall the official client or revoke gateway credentials.
+account configuration. After a failed operation, use the recovery selection and
+resume action. After a crash or unexpected process interruption, reopen the
+assistant on the same Windows account to use retained recovery. A committed
+configuration retries its completion receipt instead of writing credentials again.
+Cancel or closing the assistant normally clears pending local recovery; installed
+clients, configuration, backups, and gateway credentials remain.
 
 For manual restoration, close the desktop client and assistant, retain a copy of
 the current configuration, and restore only the matching backup created for that

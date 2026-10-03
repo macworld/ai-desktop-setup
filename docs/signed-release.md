@@ -1,24 +1,22 @@
-# Staged signed release
+# Signed release procedure
 
-The source and staged workflow are public at
-[macworld/ai-desktop-setup](https://github.com/macworld/ai-desktop-setup). The signed
-release workflow has not run against SignPath. See
-[Actions](https://github.com/macworld/ai-desktop-setup/actions) for current outcomes.
-The Foundation application was submitted on 2026-10-03 and is awaiting review;
-eligibility is not guaranteed. There is no Foundation approval, signing certificate,
-full native installation acceptance, or published signed release. Native ARM64 wrapper UI
-startup passed only. Formal signing remains disabled (`RELEASE_ENABLED=false`).
+This guide describes the staged workflow for building, signing, validating, and
+publishing an immutable Windows release. It implements the
+[code signing policy](code-signing-policy.md); build outcomes are available in
+[Actions](https://github.com/macworld/ai-desktop-setup/actions), and release-specific
+status belongs in [release notes](https://github.com/macworld/ai-desktop-setup/releases).
 
-[Wenhao Liu (macworld)](https://github.com/macworld) is the sole known maintainer,
-author and reviewer, and the intended signing authority as repository owner.
-SignPath roles remain pending approval/setup, and an independent release approver
-is not configured. Self-review cannot satisfy the independent environment gates.
-All contributors must use MFA under project policy; account MFA and approval
-configuration have not been verified. See the [Code signing policy](code-signing-policy.md).
+The workflow is disabled unless `RELEASE_ENABLED` is explicitly set to `true`.
+Enabling it requires SignPath Foundation acceptance and configuration, designated
+signing roles, and independent release approvers. All contributors must use MFA;
+verify account and approval settings before enabling the workflow. Self-review
+cannot satisfy the independent environment gates. See
+[repository and release roles](../CONTRIBUTING.md#repository-and-release-roles).
 
-`release.yml` accepts protected version tags only, in the configured original
-repository. Ordinary PR/main CI remains unsigned and has no signing secrets.
-Before enabling it, review the exact committed workflow and configure:
+[release.yml](../.github/workflows/release.yml) accepts protected version tags only,
+in the configured original repository. Ordinary PR/main CI remains unsigned and
+has no signing secrets. Before enabling it, review the exact committed workflow
+and configure:
 
 - `RELEASE_REPOSITORY` (exact owner/repository), then `RELEASE_ENABLED=true` only
   when all prerequisites below are ready. Tags must match the project version.
