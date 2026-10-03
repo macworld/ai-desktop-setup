@@ -1,0 +1,8 @@
+<Project>
+  <!-- The Framework app selects its CPU with PlatformTarget and has no native
+       NuGet assets. Clear only the SDK's host-specific default RID after
+       inference, before restore collects its graph. Explicit RIDs are retained. -->
+  <PropertyGroup Condition="'$(TargetFrameworkIdentifier)' == '.NETFramework' And '$(_UsingDefaultRuntimeIdentifier)' == 'true'">
+    <RuntimeIdentifier></RuntimeIdentifier>
+  </PropertyGroup>
+</Project>
