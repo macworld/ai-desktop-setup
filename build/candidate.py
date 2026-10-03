@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exact Git-tree staging and complete retained-file inventories (no audit rules)."""
 import argparse
+from collections import Counter
 import hashlib
 import json
 import os
@@ -65,7 +66,7 @@ def trx_report(path):
     def nodes(name):
         return [n for n in tree.iter() if n.tag.rsplit('}', 1)[-1] == name]
     counters, summaries = nodes('Counters'), nodes('ResultSummary')
-    results, definitions = nodes('UnitTestResult'), nodes('UnitTest')
+    results, definitions, entries = nodes('UnitTestResult'), nodes('UnitTest'), nodes('TestEntry')
     if len(counters) != 1:
         raise ValueError('Missing or ambiguous test counters')
     if len(summaries) != 1 or summaries[0].get('outcome') != 'Completed':
@@ -79,24 +80,65 @@ def trx_report(path):
     counts = {k: int(counters[0].get(k, '-1')) for k in ('total', 'executed', 'passed') + zero_counts}
     result_ids = [n.get('testId') for n in results]
     definition_ids = [n.get('id') for n in definitions]
+    execution_ids = [n.get('executionId') for n in results]
+    result_pairs = {(n.get('testId'), n.get('executionId')) for n in results}
+    entry_pairs = {(n.get('testId'), n.get('executionId')) for n in entries}
     if (counts['total'] <= 0 or counts['executed'] <= 0 or any(counts[k] != 0 for k in zero_counts) or
         counts['passed'] != counts['executed'] or
-        len(results) != counts['total'] or len(definitions) != counts['total'] or
-        any(not test_id for test_id in result_ids + definition_ids) or
-        len(set(result_ids)) != len(results) or set(result_ids) != set(definition_ids)):
-        raise ValueError('Inconsistent or empty test execution')
+        len(results) != counts['total'] or len(entries) != counts['total']):
+        raise ValueError('Inconsistent or empty test execution '
+                         f'(total={counts["total"]}, executed={counts["executed"]}, '
+                         f'passed={counts["passed"]}, results={len(results)}, entries={len(entries)})')
+    # Runtime-enumerated xUnit theories share a method testId/definition;
+    # each reported row has its own executionId and corresponding TestEntry.
+    if (any(not value for value in result_ids + definition_ids + execution_ids) or
+        len(set(definition_ids)) != len(definitions) or
+        set(result_ids) != set(definition_ids) or
+        len(set(execution_ids)) != len(results) or result_pairs != entry_pairs or
+        len({(n.get('testId'), n.get('testName')) for n in results}) != len(results)):
+        raise ValueError('Ambiguous or mismatched test execution identities '
+                         f'(results={len(results)}, definitions={len(definitions)}, '
+                         f'test_ids={len(set(result_ids))}, execution_ids={len(set(execution_ids))})')
     names = {n.get('id'): n.get('name') for n in definitions}
+    method_names = {}
+    def row_name(name, method):
+        return bool(name and name.startswith(method + '(') and name.endswith(')'))
+    for definition in definitions:
+        methods = [n for n in definition if n.tag.rsplit('}', 1)[-1] == 'TestMethod']
+        executions = [n for n in definition if n.tag.rsplit('}', 1)[-1] == 'Execution']
+        if (len(methods) != 1 or not methods[0].get('className') or not methods[0].get('name') or
+            len(executions) != 1 or (definition.get('id'), executions[0].get('id')) not in result_pairs):
+            raise ValueError('Missing or mismatched test definition identity')
+        method = methods[0].get('className') + '.' + methods[0].get('name')
+        if definition.get('name') != method and not row_name(definition.get('name'), method):
+            raise ValueError('Test definition name does not match its method')
+        method_names[definition.get('id')] = method
+    row_counts = Counter(result_ids)
+    for result in results:
+        name, test_id = result.get('testName'), result.get('testId')
+        if row_counts[test_id] > 1:
+            matches = names[test_id] == method_names[test_id] and row_name(name, method_names[test_id])
+        else:
+            matches = names[test_id] == name
+        if not matches:
+            raise ValueError('Test identity mismatch')
     skipped, passed = [], 0
     for result in results:
-        name = result.get('testName')
-        if names[result.get('testId')] != name:
-            raise ValueError('Test identity mismatch')
+        name, test_id = result.get('testName'), result.get('testId')
         if result.get('outcome') == 'Passed':
             passed += 1
-        elif result.get('outcome') == 'NotExecuted' and name in OPTIONAL_PACKAGE_TESTS:
+        elif (result.get('outcome') == 'NotExecuted' and name in OPTIONAL_PACKAGE_TESTS and
+              method_names[test_id] == name and row_counts[test_id] == 1 and name not in skipped):
             skipped.append(name)
         else:
-            raise ValueError('Failed, unexpected skipped, or unknown test outcome')
+            allowed_skips = sum(n.get('outcome') == 'NotExecuted' and
+                                n.get('testName') in OPTIONAL_PACKAGE_TESTS for n in results)
+            unexpected_skips = sum(n.get('outcome') == 'NotExecuted' and
+                                   n.get('testName') not in OPTIONAL_PACKAGE_TESTS for n in results)
+            other_outcomes = sum(n.get('outcome') not in ('Passed', 'NotExecuted') for n in results)
+            raise ValueError('Failed, repeated gate, unexpected skipped, or unknown test outcome '
+                             f'(allowed_skips={allowed_skips}, unexpected_skips={unexpected_skips}, '
+                             f'other_outcomes={other_outcomes})')
     if passed != counts['passed'] or passed + len(skipped) != counts['total']:
         raise ValueError('Result counters disagree')
     return dict(total=counts['total'], executed=passed, passed=passed, skipped=sorted(skipped),
