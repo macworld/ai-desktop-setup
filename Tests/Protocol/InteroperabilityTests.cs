@@ -23,7 +23,7 @@ public sealed class InteroperabilityTests(Xunit.Abstractions.ITestOutputHelper o
     [InlineData(true)]
     public async Task AcceptedStalledPeerCannotBlockTeardown(bool finishHandshake)
     {
-        var gateway = new NeutralGateway("/setup", "Example", "model", false, output.WriteLine);
+        await using var gateway = new NeutralGateway("/setup", "Example", "model", false, output.WriteLine);
         using var peer = new TcpClient();
         var origin = new Uri(gateway.Origin);
         await peer.ConnectAsync(origin.Host, origin.Port);
@@ -223,6 +223,7 @@ internal sealed class NeutralGateway : IAsyncDisposable
     private readonly TcpListener listener = new(IPAddress.Loopback, 0);
     private readonly CancellationTokenSource stop = new();
     private readonly Task server;
+    private Task? disposal;
     private readonly Action<string> diagnostic;
     internal X509Certificate2 Certificate { get; }
     internal string Origin { get; }
@@ -326,6 +327,15 @@ internal sealed class NeutralGateway : IAsyncDisposable
         return (200, Encoding.UTF8.GetBytes(snapshot.ToJsonString()), null);
     }
     internal static (int Status, byte[] Body, string? Extra) Error(int status, string code, string? extra = null) => (status, JsonSerializer.SerializeToUtf8Bytes(new { error = new { code, request_id = "fixture" } }), extra);
-    public async ValueTask DisposeAsync() { stop.Cancel(); listener.Stop(); await server; Certificate.Dispose(); stop.Dispose(); }
+    public ValueTask DisposeAsync() => new(disposal ??= DisposeCore());
+    private async Task DisposeCore()
+    {
+        try { stop.Cancel(); listener.Stop(); await server; }
+        finally
+        {
+            try { Certificate.Dispose(); }
+            finally { stop.Dispose(); }
+        }
+    }
 }
 #endif

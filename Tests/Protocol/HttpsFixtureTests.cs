@@ -1,5 +1,7 @@
 #if !NETFRAMEWORK
 using System.ComponentModel;
+using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -8,6 +10,37 @@ namespace AiDesktopSetup.Tests.Protocol;
 
 public sealed class HttpsFixtureTests
 {
+    [Fact]
+    public async Task FaultedGatewayDisposalReleasesCertificateAndPreservesFailure()
+    {
+        var gateway = new NeutralGateway("/setup", "Example", "model", false, _ => { });
+        var faultEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gateway.Fault = _ => { faultEntered.SetResult(); throw new InvalidOperationException("fixture-reply-failure"); };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        try
+        {
+            using var peer = new TcpClient();
+            var origin = new Uri(gateway.Origin);
+            await peer.ConnectAsync(origin.Host, origin.Port, timeout.Token);
+            using var tls = new SslStream(peer.GetStream(), false, (_, cert, _, _) => cert != null && cert.GetRawCertData().SequenceEqual(gateway.Certificate.RawData));
+            await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = "localhost" }, timeout.Token);
+            await tls.WriteAsync(System.Text.Encoding.ASCII.GetBytes("GET /setup HTTP/1.1\r\nHost: localhost\r\n\r\n"), timeout.Token);
+            await tls.FlushAsync(timeout.Token);
+            await faultEntered.Task.WaitAsync(timeout.Token);
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.DisposeAsync().AsTask());
+            Assert.Equal("fixture-reply-failure", failure.Message);
+            Assert.Equal(IntPtr.Zero, gateway.Certificate.Handle);
+            var repeated = await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.DisposeAsync().AsTask());
+            Assert.Same(failure, repeated);
+        }
+        finally
+        {
+            try { await gateway.DisposeAsync(); }
+            catch (InvalidOperationException) { }
+            finally { gateway.Certificate.Dispose(); }
+        }
+    }
+
     [Fact]
     public void ImportedServerCertificateRetainsIdentityAndKeyAfterIssuerIsDisposed()
     {
