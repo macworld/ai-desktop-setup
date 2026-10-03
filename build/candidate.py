@@ -64,16 +64,25 @@ def trx_report(path):
     tree = ET.parse(path)
     def nodes(name):
         return [n for n in tree.iter() if n.tag.rsplit('}', 1)[-1] == name]
-    counters = nodes('Counters')
+    counters, summaries = nodes('Counters'), nodes('ResultSummary')
     results, definitions = nodes('UnitTestResult'), nodes('UnitTest')
     if len(counters) != 1:
         raise ValueError('Missing or ambiguous test counters')
-    counts = {k: int(counters[0].get(k, '-1')) for k in ('total', 'executed', 'passed', 'failed', 'notExecuted')}
+    if len(summaries) != 1 or summaries[0].get('outcome') != 'Completed':
+        raise ValueError('Missing, ambiguous, or unsuccessful test run summary')
+    # The locked VSTest TRX logger sets executed = passed + failed and
+    # leaves every auxiliary outcome counter zero, including notExecuted.
+    # Skips must be reconciled with the individual results, not that field.
+    zero_counts = ('failed', 'error', 'timeout', 'aborted', 'inconclusive',
+                   'passedButRunAborted', 'notRunnable', 'notExecuted',
+                   'disconnected', 'warning', 'completed', 'inProgress', 'pending')
+    counts = {k: int(counters[0].get(k, '-1')) for k in ('total', 'executed', 'passed') + zero_counts}
     result_ids = [n.get('testId') for n in results]
     definition_ids = [n.get('id') for n in definitions]
-    if (counts['total'] <= 0 or counts['executed'] <= 0 or counts['failed'] != 0 or
-        counts['passed'] != counts['executed'] or counts['total'] != counts['passed'] + counts['notExecuted'] or
+    if (counts['total'] <= 0 or counts['executed'] <= 0 or any(counts[k] != 0 for k in zero_counts) or
+        counts['passed'] != counts['executed'] or
         len(results) != counts['total'] or len(definitions) != counts['total'] or
+        any(not test_id for test_id in result_ids + definition_ids) or
         len(set(result_ids)) != len(results) or set(result_ids) != set(definition_ids)):
         raise ValueError('Inconsistent or empty test execution')
     names = {n.get('id'): n.get('name') for n in definitions}
@@ -88,7 +97,7 @@ def trx_report(path):
             skipped.append(name)
         else:
             raise ValueError('Failed, unexpected skipped, or unknown test outcome')
-    if passed != counts['passed'] or len(skipped) != counts['notExecuted']:
+    if passed != counts['passed'] or passed + len(skipped) != counts['total']:
         raise ValueError('Result counters disagree')
     return dict(total=counts['total'], executed=passed, passed=passed, skipped=sorted(skipped),
                 unverified_native_gates=sorted(skipped))

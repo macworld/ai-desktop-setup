@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 SPEC = importlib.util.spec_from_file_location('candidate', Path(__file__).with_name('candidate.py'))
 
@@ -62,25 +63,131 @@ class CandidateTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.inventory(self.root)
 
-    def test_trx_allows_only_named_package_gates_and_retains_evidence(self):
+    # Counter values observed from a three-test run with locked SDK 10.0.401
+    # (VSTest 18.7.0), Test.Sdk 17.14.1, and xunit.runner.visualstudio 3.1.5.
+    # VSTest leaves notExecuted (and every auxiliary counter) zero even
+    # when individual results are NotExecuted. No host/run metadata retained.
+    TRX_COUNTS = dict(total='3', executed='1', passed='1', failed='0',
+        error='0', timeout='0', aborted='0', inconclusive='0',
+        passedButRunAborted='0', notRunnable='0', notExecuted='0',
+        disconnected='0', warning='0', completed='0', inProgress='0', pending='0')
+    TRX_RESULTS = [
+        ('AiDesktopSetup.Tests.PackagePolicyTests.EmptyMirrorsUsesOfficialSource', 'Passed'),
+        ('AiDesktopSetup.Tests.NativePackageTrustTests.ActualOfficialPackageRequiresNativeTrustAndPinsBytes', 'NotExecuted'),
+        ('AiDesktopSetup.Tests.NativePackageTrustTests.ActualOfficialPackageTamperedManifestAndPayloadFailNativeTrust', 'NotExecuted'),
+    ]
+
+    def write_trx(self, results=None, counts=None):
+        tree = ET.Element('TestRun', xmlns='http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
+        result_nodes = ET.SubElement(tree, 'Results')
+        definition_nodes = ET.SubElement(tree, 'TestDefinitions')
+        for i, (name, outcome) in enumerate(self.TRX_RESULTS if results is None else results):
+            test_id = '00000000-0000-0000-0000-%012d' % i
+            ET.SubElement(result_nodes, 'UnitTestResult', testId=test_id, testName=name, outcome=outcome)
+            ET.SubElement(definition_nodes, 'UnitTest', id=test_id, name=name)
+        summary = ET.SubElement(tree, 'ResultSummary', outcome='Completed')
+        ET.SubElement(summary, 'Counters', self.TRX_COUNTS | (counts or {}))
+        path = self.root / 'test.trx'
+        ET.ElementTree(tree).write(path, encoding='utf-8', xml_declaration=True)
+        return path
+
+    def test_trx_accepts_authentic_vstest_skip_counters_and_retains_evidence(self):
+        result = self.module().trx_report(self.write_trx())
+        skipped = [
+            'AiDesktopSetup.Tests.NativePackageTrustTests.ActualOfficialPackageRequiresNativeTrustAndPinsBytes',
+            'AiDesktopSetup.Tests.NativePackageTrustTests.ActualOfficialPackageTamperedManifestAndPayloadFailNativeTrust',
+        ]
+        self.assertEqual(result, dict(total=3, executed=1, passed=1,
+            skipped=skipped, unverified_native_gates=skipped))
+
+    def test_trx_accepts_nonempty_all_passed_run(self):
+        result = self.module().trx_report(self.write_trx([('OrdinaryTest', 'Passed')], {'total':'1'}))
+        self.assertEqual(result, dict(total=1, executed=1, passed=1, skipped=[], unverified_native_gates=[]))
+
+    def test_trx_accepts_either_named_skip_individually(self):
+        for optional in self.TRX_RESULTS[1:]:
+            with self.subTest(skip=optional[0]):
+                result = self.module().trx_report(self.write_trx(
+                    [('OrdinaryTest', 'Passed'), optional], {'total':'2'}))
+                self.assertEqual(result['skipped'], [optional[0]])
+                self.assertEqual(result['executed'], 1)
+
+    def test_trx_rejects_counters_that_disagree_with_individual_outcomes(self):
+        for counts in ({'executed':'2', 'passed':'2'}, {'notExecuted':'2'}):
+            with self.subTest(counts=counts), self.assertRaises(ValueError):
+                self.module().trx_report(self.write_trx(counts=counts))
+
+    def test_trx_rejects_inconsistent_primary_and_auxiliary_counters(self):
         mod = self.module()
-        self.assertTrue(hasattr(mod, 'trx_report'), 'structured TRX gate missing')
-        def write(names, counts):
-            path = self.root / 'test.trx'
-            results = ''.join('<UnitTestResult testId="%s" testName="%s" outcome="%s"/>' % (i,n,o) for i,(n,o) in enumerate(names))
-            definitions = ''.join('<UnitTest id="%s" name="%s"/>' % (i,n) for i,(n,o) in enumerate(names))
-            path.write_text('<TestRun><Results>'+results+'</Results><TestDefinitions>'+definitions+'</TestDefinitions><ResultSummary><Counters '+counts+'/></ResultSummary></TestRun>')
-            return path
-        optional = 'AiDesktopSetup.Tests.NativePackageTrustTests.ActualOfficialPackageRequiresNativeTrustAndPinsBytes'
-        p = write([('OrdinaryTest','Passed'),(optional,'NotExecuted')], 'total="2" executed="1" passed="1" failed="0" notExecuted="1"')
-        result = mod.trx_report(p)
-        self.assertEqual(result['skipped'], [optional])
-        self.assertEqual(result['executed'], 1)
-        for names,counts in [([('OrdinaryTest','Failed')], 'total="1" executed="1" passed="0" failed="1" notExecuted="0"'),
-                             ([('Unexpected','NotExecuted'),('OrdinaryTest','Passed')], 'total="2" executed="1" passed="1" failed="0" notExecuted="1"'),
-                             ([(optional,'NotExecuted')], 'total="1" executed="0" passed="0" failed="0" notExecuted="1"'),
-                             ([('OrdinaryTest','Passed')], 'total="2" executed="1" passed="1" failed="0" notExecuted="1"')]:
-            with self.assertRaises(ValueError): mod.trx_report(write(names, counts))
+        mutations = {'total':'4', 'executed':'3', 'passed':'3', 'failed':'1',
+            'notExecuted':'2'}
+        mutations.update({key:'1' for key in ('error', 'timeout', 'aborted',
+            'inconclusive', 'passedButRunAborted', 'notRunnable', 'disconnected',
+            'warning', 'completed', 'inProgress', 'pending')})
+        for key, value in mutations.items():
+            with self.subTest(counter=key), self.assertRaises(ValueError):
+                mod.trx_report(self.write_trx([('OrdinaryTest', 'Passed')],
+                    {'total':'1'} | {key:value}))
+
+    def test_trx_rejects_missing_negative_or_malformed_counters(self):
+        for key in self.TRX_COUNTS:
+            for value in (None, '-1', 'invalid'):
+                with self.subTest(counter=key, value=value):
+                    path = self.write_trx([('OrdinaryTest', 'Passed')], {'total':'1'})
+                    tree = ET.parse(path)
+                    counters = next(n for n in tree.iter() if n.tag.endswith('Counters'))
+                    if value is None:
+                        del counters.attrib[key]
+                    else:
+                        counters.set(key, value)
+                    tree.write(path)
+                    with self.assertRaises(ValueError):
+                        self.module().trx_report(path)
+
+    def test_trx_rejects_failed_unknown_or_unexpected_skipped_result(self):
+        for outcome in ('Failed', 'NotExecuted', 'Error', 'Pending', 'Unknown'):
+            with self.subTest(outcome=outcome), self.assertRaises(ValueError):
+                self.module().trx_report(self.write_trx([('OrdinaryTest', outcome)], {'total':'1'}))
+
+    def test_trx_rejects_empty_or_all_skipped_execution(self):
+        for results, total in ([], '0'), (self.TRX_RESULTS[1:], '2'):
+            with self.subTest(total=total), self.assertRaises(ValueError):
+                self.module().trx_report(self.write_trx(results,
+                    {'total':total, 'executed':'0', 'passed':'0'}))
+
+    def test_trx_rejects_identity_mismatch_duplicate_or_missing_results(self):
+        for mutation in ('name', 'id', 'duplicate', 'missing', 'missing-id'):
+            with self.subTest(mutation=mutation):
+                path = self.write_trx()
+                tree = ET.parse(path)
+                results = next(n for n in tree.iter() if n.tag.endswith('Results'))
+                if mutation == 'name':
+                    results[0].set('testName', 'DifferentTest')
+                elif mutation == 'id':
+                    results[0].set('testId', 'unmatched-id')
+                elif mutation == 'duplicate':
+                    results[1].set('testId', results[0].get('testId'))
+                elif mutation == 'missing':
+                    results.remove(results[0])
+                else:
+                    del results[0].attrib['testId']
+                tree.write(path)
+                with self.assertRaises(ValueError):
+                    self.module().trx_report(path)
+
+    def test_trx_rejects_failed_or_missing_run_summary(self):
+        for outcome in ('Failed', 'Error', 'Aborted', None):
+            with self.subTest(outcome=outcome):
+                path = self.write_trx([('OrdinaryTest', 'Passed')], {'total':'1'})
+                tree = ET.parse(path)
+                summary = next(n for n in tree.iter() if n.tag.endswith('ResultSummary'))
+                if outcome is None:
+                    del summary.attrib['outcome']
+                else:
+                    summary.set('outcome', outcome)
+                tree.write(path)
+                with self.assertRaises(ValueError):
+                    self.module().trx_report(path)
 
 
 if __name__ == '__main__':
