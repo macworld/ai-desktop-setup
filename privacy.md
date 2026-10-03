@@ -7,9 +7,13 @@ configuration/API credentials, model catalog and permitted branding under AGSP.
 Confirm the service and address before authenticating; a code chooses whom you trust.
 
 The installed client sends API credentials and inference requests to the configured
-gateway when you use it. This assistant does not make paid inference requests.
+gateway when you use it. Your chosen gateway governs that processing under its own
+privacy policy; review it before authenticating. This assistant does not make paid
+inference requests.
 Official desktop packages are downloaded from their official sources under their
-own terms; those servers receive ordinary download connection information. The
+own terms; those servers receive ordinary download connection information. Official
+OpenAI downloads and client services are covered by the
+[OpenAI privacy policy](https://openai.com/policies/privacy-policy/). The
 assistant does not bundle the official proprietary desktop client.
 
 Credentials, local recovery state and configuration backups are sensitive. The

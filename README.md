@@ -4,6 +4,15 @@ A neutral Windows desktop setup client with authenticated AGSP discovery and
 recoverable installation/configuration. Opening the UI and previewing a setup code
 make no network requests. Confirm the displayed setup/API addresses to authenticate.
 
+Source is public at [macworld/ai-desktop-setup](https://github.com/macworld/ai-desktop-setup).
+The project is maintained by [Wenhao Liu (macworld)](https://github.com/macworld).
+It is in preview: there is no signed release or SignPath Foundation approval. Native
+ARM64 wrapper UI startup has passed; full installation acceptance remains pending.
+See [Actions](https://github.com/macworld/ai-desktop-setup/actions) for hosted build
+outcomes and [Releases](https://github.com/macworld/ai-desktop-setup/releases) for
+unsigned preview availability. The first hosted build failed during the NSIS
+download; this documentation does not establish a successful CI run.
+
 The Core and Tests projects target .NET 10 and .NET Framework 4.8. The WPF App
 uses the Windows-provided .NET Framework 4.8 on x64 and 4.8.1 on ARM64; a .NET 10
 runtime is never bundled. Local developer builds use exactly .NET SDK 10.0.401 and NSIS 3.12:
@@ -26,7 +35,8 @@ the end-to-end workflow rechecks authorization before installing or writing secr
 Interrupted committed configuration retries only its completion receipt. See the
 [Codex adapter policy](docs/codex-adapter.md) and
 [Windows acceptance matrix](docs/windows-acceptance.md). Native Windows
-runtime, ACL, UAC, WPF and package-install acceptance is required before release;
+runtime, ACL, UAC, WPF and package-install acceptance is required before a production
+release;
 cross-compilation alone does not establish those behaviors.
 
 `protocol/` contains the AGSP v1 wire contract. Owned source uses the MIT license;
@@ -37,12 +47,17 @@ and are identified in `THIRD-PARTY-NOTICES.md`.
 
 Download the architecture matching the native Windows system: x64 requires Windows
 10 2004+ with .NET Framework 4.8; ARM64 requires Windows 11 22H2+ with 4.8.1.
-Open the assistant, paste the setup code supplied by your chosen gateway, inspect
+Use an AGSP-compatible setup service that supplies a supported Codex configuration;
+an arbitrary gateway needs an AGSP integration before it can issue usable setup codes.
+The current installer adapter targets the `OpenAI.Codex` desktop package, whose
+official vendor download filenames contain `ChatGPT`; see the
+[Codex adapter policy](docs/codex-adapter.md).
+Open the assistant, paste the setup code supplied by your chosen service, inspect
 the displayed service/API addresses, and confirm authentication. Choose Install and
 configure, approve Windows elevation only for the official package installation,
 then open the desktop client. This requires network access for official downloads.
 See [privacy](privacy.md), [removal and recovery](uninstall.md), and
-[signing policy](docs/code-signing-policy.md).
+[Code signing policy](docs/code-signing-policy.md).
 
 ## Reproducible input boundary
 
@@ -54,8 +69,10 @@ cohort. Pre-existing developer output is never reused. Public helpers contain no
 private audit rules. CI does not itself assert a private neutrality audit pass.
 
 Hosted shared net48 testing is separate from the Windows 10 x64 and native ARM64
-acceptance matrix. The latter remains required before release. No hosted CI or
-signing run is claimed by checking in a workflow. There is no public release URL yet.
+acceptance matrix. The latter remains required before a production release.
+Hosted build outcomes are recorded in
+[Actions](https://github.com/macworld/ai-desktop-setup/actions). A checked-in workflow
+does not establish successful CI, signing or full installation acceptance.
 
 Ordinary hosted CI permits only the two named existing official-MSIX fixture tests
 to be skipped when no real package fixture is supplied. It records those exact
