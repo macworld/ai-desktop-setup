@@ -8,8 +8,9 @@ previews when published. No signed release or signing certificate exists.
 Hosted CI execution, native Windows acceptance,
 signing and publication each require their own evidence for the exact candidate.
 
-SignPath Foundation is the intended signing service. No application has been
-submitted or approved, and eligibility is not guaranteed. The application packet
+SignPath Foundation is the intended signing service. The application was submitted
+on 2026-10-03 and is awaiting review. No approval or signing certificate has been
+granted, and eligibility is not guaranteed. The application packet
 is this project's published source, MIT license, third-party notices, build workflow,
 security policy, contributor/role assignments and a reviewable preview. The sole
 known maintainer, author and reviewer is
