@@ -108,6 +108,26 @@ public sealed class SetupCoordinatorTests
         Assert.Equal(SetupLocalState.Incomplete, result.LocalState); Assert.False(result.CanLaunch); Assert.True(result.NeedsSignOut);
         Assert.Equal(0, f.Configuration.WriteCalls); Assert.Equal(0, f.Session.CredentialsCalls); Assert.Equal(0, f.Session.CompleteCalls);
     }
+    [Fact] public async Task FailedOriginalUserRegistrationNeverReleasesOrWritesSecrets()
+    {
+        var root = Path.Combine(ProtocolFixtures.TemporaryDirectory(), "workflow-registration-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var f = new Fixture();
+            // Enter the same production mapping used after helper provisioning, rather than synthesizing an Installed flag.
+            f.Installer.State = WindowsInstallerPolicy.RegistrationOutcome(new(false, NeedsSignOut: true), needsRestart: true);
+            var home = Path.Combine(root, "codex");
+            var c = new SetupCoordinator(f.Store, f.Session, f.Installer, new DesktopSetupConfiguration(home), f.Clock, new("1.0.0", "x64"));
+            var setup = await c.AuthenticateAsync(ProtocolFixtures.Code(), default);
+            var outcome = await c.InstallAndConfigureAsync(setup, null, default);
+            Assert.Equal(SetupLocalState.Incomplete, outcome.LocalState);
+            Assert.True(outcome.NeedsSignOut); Assert.True(outcome.NeedsRestart); Assert.False(outcome.CanLaunch);
+            Assert.Equal(0, f.Session.CredentialsCalls); Assert.Equal(0, f.Session.CompleteCalls);
+            Assert.False(File.Exists(Path.Combine(home, "auth.json"))); Assert.False(File.Exists(Path.Combine(home, "config.toml")));
+            Assert.NotNull(f.Store.Load(setup.ResumeId));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
     [Fact] public async Task RealStoreAndJournalReceiptRetryPreserveFilesAndCleanupOwnedStages()
     {
         var root = Path.Combine(ProtocolFixtures.TemporaryDirectory(), "workflow-real-" + Guid.NewGuid().ToString("N"));

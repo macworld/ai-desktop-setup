@@ -156,12 +156,12 @@ public sealed class WindowsInstaller
                 SetupDiagnostics.Current.Record(terminal?.Type switch { "success" => SetupEvent.HelperSuccess, "cancelled" => SetupEvent.HelperCancelled, _ => SetupEvent.HelperError });
                 if (terminal?.Type == "cancelled") throw new OperationCanceledException("已取消下载安装。", cancellationToken);
                 if (terminal?.Type != "success" || helper.ExitCode != 0)
-                    throw new SetupException(terminal?.Error ?? "Windows 未能确认安装成功，账户配置尚未开始。请重试或联系管理员。");
+                    throw WindowsInstallerPolicy.DeploymentFailure(terminal?.Error);
                 // Query in the original user identity, including when UAC used a different administrator.
                 var registered = await RegisterAsync(CancellationToken.None).ConfigureAwait(false);
                 SetupDiagnostics.Current.Record(registered.Installed ? SetupEvent.Registered : SetupEvent.SignOutRequired);
                 if (terminal.NeedsRestart) SetupDiagnostics.Current.Record(SetupEvent.RestartRequired);
-                return new(true, !registered.Installed, terminal.NeedsRestart);
+                return WindowsInstallerPolicy.RegistrationOutcome(registered, terminal.NeedsRestart);
             }
             finally
             {

@@ -8,6 +8,23 @@ namespace AiDesktopSetup.Tests;
 
 public sealed class WindowsInstallerTests
 {
+    [Theory]
+    [InlineData(false, true, true, false, true, true)]
+    [InlineData(false, false, false, false, false, false)]
+    [InlineData(true, false, true, true, false, true)]
+    [InlineData(true, true, false, true, true, false)]
+    public void ProvisionedPackageOutcomeUsesOriginalUserRegistration(bool installed, bool signOut, bool restart, bool expectedInstalled, bool expectedSignOut, bool expectedRestart)
+    {
+        var state = WindowsInstallerPolicy.RegistrationOutcome(new(installed, signOut), restart);
+        Assert.Equal(new InstallState(expectedInstalled, expectedSignOut, expectedRestart), state);
+    }
+    [Fact] public void HelperFailureDoesNotExposeArbitraryPipeDetails()
+    {
+        var error = WindowsInstallerPolicy.DeploymentFailure("synthetic-private-key remote detail");
+        Assert.DoesNotContain("synthetic-private-key", AiDesktopSetup.Core.Workflow.SetupFailurePresentation.Message(error));
+        Assert.Equal("Windows 未能确认安装成功，账户配置尚未开始。请重试或联系管理员。", error.Message);
+    }
+
     private const string Publisher = "CN=50BDFD77-8903-4850-9FFE-6E8522F64D5B";
 
     [Theory]

@@ -193,6 +193,7 @@ public sealed class ConfigurationTests : IDisposable
         var backup = Assert.Single(Directory.GetDirectories(root, "ai-desktop-setup-backup.*"));
         Assert.Contains("手动恢复", error.Message);
         Assert.Contains(backup, error.Message);
+        Assert.Contains(backup, AiDesktopSetup.Core.Workflow.SetupFailurePresentation.Message(error));
         Assert.DoesNotContain(Token, error.ToString());
         Assert.Equal(originalAuth, await TestCompat.ReadAllTextAsync(Path.Combine(backup, "auth.json")));
         if (configExisted) Assert.Equal(originalConfig, await TestCompat.ReadAllTextAsync(Path.Combine(backup, "config.toml")));
