@@ -6,12 +6,11 @@ make no network requests. Confirm the displayed setup/API addresses to authentic
 
 Source is public at [macworld/ai-desktop-setup](https://github.com/macworld/ai-desktop-setup).
 The project is maintained by [Wenhao Liu (macworld)](https://github.com/macworld).
-It is in preview: there is no signed release or SignPath Foundation approval. Native
+It is an unsigned preview: there is no signed release or SignPath Foundation approval. Native
 ARM64 wrapper UI startup has passed; full installation acceptance remains pending.
 See [Actions](https://github.com/macworld/ai-desktop-setup/actions) for hosted build
 outcomes and [Releases](https://github.com/macworld/ai-desktop-setup/releases) for
-unsigned preview availability. The first hosted build failed during the NSIS
-download; this documentation does not establish a successful CI run.
+unsigned preview availability.
 
 The Core and Tests projects target .NET 10 and .NET Framework 4.8. The WPF App
 uses the Windows-provided .NET Framework 4.8 on x64 and 4.8.1 on ARM64; a .NET 10

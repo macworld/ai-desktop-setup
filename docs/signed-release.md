@@ -2,8 +2,7 @@
 
 The source and staged workflow are public at
 [macworld/ai-desktop-setup](https://github.com/macworld/ai-desktop-setup). The signed
-release workflow has not run against SignPath; the first ordinary hosted build
-failed during the NSIS download. See
+release workflow has not run against SignPath. See
 [Actions](https://github.com/macworld/ai-desktop-setup/actions) for current outcomes.
 There is no Foundation submission or approval, signing certificate, full native
 installation acceptance, or published signed release. Native ARM64 wrapper UI
