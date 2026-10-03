@@ -114,6 +114,8 @@ public sealed class SessionAccess
     private SessionAccess(ValidatedSession session, ResumeSecret secret, ApiCredential? originalCredential, bool provided)
     {
         if (session == null || secret == null || (session.CredentialType == CredentialType.ApiKey ? !provided || originalCredential == null : provided)) throw new ProtocolException();
+        // Session IDs are sent in URLs, which must never carry a known bearer.
+        if (session.Snapshot.SessionId.Contains(secret.ToBearer()) || (originalCredential != null && session.Snapshot.SessionId.Contains(originalCredential.Value))) throw new ProtocolException();
         Session = session; ResumeSecret = secret; OriginalCredential = originalCredential;
     }
     public override string ToString() => "[redacted]";

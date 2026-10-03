@@ -168,10 +168,10 @@ public sealed class SetupSessionClient : ISetupSessionClient
     private static async Task<byte[]> ReadBounded(HttpContent content, int limit, CancellationToken ct)
     {
         if (content.Headers.ContentLength > limit || content.Headers.ContentEncoding.Count != 0) throw new ProtocolException();
-        using var stream = await content.ReadAsStreamAsync().ConfigureAwait(false); using var output = new MemoryStream(); var buffer = new byte[8192];
+        using var stream = await RuntimeCompat.ReadAsStreamAsync(content, ct).ConfigureAwait(false); using var output = new MemoryStream(); var buffer = new byte[8192];
         while (true)
         {
-            var count = await stream.ReadAsync(buffer, 0, Math.Min(buffer.Length, limit + 1 - (int)output.Length), ct).ConfigureAwait(false);
+            var count = await RuntimeCompat.ReadAsync(stream, buffer, 0, Math.Min(buffer.Length, limit + 1 - (int)output.Length), ct).ConfigureAwait(false);
             if (count == 0) return output.ToArray(); output.Write(buffer, 0, count); if (output.Length > limit) throw new ProtocolException();
         }
     }

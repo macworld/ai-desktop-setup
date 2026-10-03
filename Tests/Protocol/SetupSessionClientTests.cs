@@ -189,6 +189,97 @@ public sealed class SetupSessionClientTests
         Assert.Equal(jpeg,await Client(_=>Response(jpeg,"image/jpeg"),_=>decoded=true).GetLogoAsync(Access(),default));Assert.True(decoded);
         jpeg[9]=4;jpeg[10]=1;decoded=false;Assert.Null(await Client(_=>Response(jpeg,"image/jpeg"),_=>decoded=true).GetLogoAsync(Access(),default));Assert.False(decoded);
     }
+    [Theory] [InlineData(200)] [InlineData(401)] [InlineData(403)] [InlineData(503)]
+    public async Task CallerCancellationInterruptsPendingResponseStreamCreation(int status)
+    {
+        using var content = new CancellationBoundaryContent(pendingCreation: true);
+        await AssertPendingResponseCancellation(content, content.Started.Task, status);
+        Assert.True(content.WasDisposed);
+    }
+    [Theory] [InlineData(200)] [InlineData(401)] [InlineData(403)] [InlineData(503)]
+    public async Task CallerCancellationInterruptsPendingResponseBodyRead(int status)
+    {
+        using var content = new CancellationBoundaryContent(pendingCreation: false);
+        await AssertPendingResponseCancellation(content, content.Body.Started.Task, status);
+        Assert.True(content.Body.WasDisposed);
+    }
+    private static async Task AssertPendingResponseCancellation(CancellationBoundaryContent content, Task started, int status)
+    {
+        using var cancel = new CancellationTokenSource(); var attempts = 0; var delays = new List<TimeSpan>();
+        var client = Client(_ => { attempts++; var response = Response([], status: status); response.Content = content; return response; }, delays: delays);
+        var operation = client.GetSessionAsync(Access(), cancel.Token);
+        try
+        {
+            await TestCompat.WithTimeout(started, TimeSpan.FromSeconds(5));
+            cancel.Cancel();
+            await TestCompat.WithTimeout(Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation), TimeSpan.FromSeconds(2));
+            Assert.Equal(1, attempts); Assert.Empty(delays);
+        }
+        finally { content.Dispose(); }
+    }
+    // Framework transports can ignore the token until disposed. Modern transports receive and honor it.
+    private sealed class CancellationBoundaryContent(bool pendingCreation) : HttpContent
+    {
+        private readonly TaskCompletionSource<Stream> pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource<bool> Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly CancellationBoundaryStream Body = new();
+        internal bool WasDisposed { get; private set; }
+        protected override Task<Stream> CreateContentReadStreamAsync()
+        {
+            Started.TrySetResult(true);
+            return pendingCreation ? pending.Task : Task.FromResult<Stream>(Body);
+        }
+#if !NETFRAMEWORK
+        protected override async Task<Stream> CreateContentReadStreamAsync(CancellationToken cancellationToken)
+        {
+            using (cancellationToken.Register(() => Dispose()))
+            {
+                try { return await CreateContentReadStreamAsync(); }
+                catch (Exception) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
+            }
+        }
+#endif
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) => throw new NotSupportedException();
+        protected override bool TryComputeLength(out long length) { length = 0; return false; }
+        protected override void Dispose(bool disposing)
+        {
+            WasDisposed = true; pending.TrySetException(new ObjectDisposedException(nameof(CancellationBoundaryContent))); Body.Dispose();
+            base.Dispose(disposing);
+        }
+    }
+    private sealed class CancellationBoundaryStream : Stream
+    {
+        private readonly TaskCompletionSource<int> pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal readonly TaskCompletionSource<bool> Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal bool WasDisposed { get; private set; }
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            Started.TrySetResult(true);
+#if NETFRAMEWORK
+            return await pending.Task;
+#else
+            using (cancellationToken.Register(() => Dispose()))
+            {
+                try { return await pending.Task; }
+                catch (Exception) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
+            }
+#endif
+        }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            WasDisposed = true; pending.TrySetException(new ObjectDisposedException(nameof(CancellationBoundaryStream))); base.Dispose(disposing);
+        }
+    }
     private sealed class BrokenContent : HttpContent
     {
         protected override Task SerializeToStreamAsync(Stream stream,System.Net.TransportContext? context) => throw new IOException("FAKE_secret");
