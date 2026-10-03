@@ -16,7 +16,7 @@ public sealed class SessionBindingValidator
         if (now >= snapshot.ExpiresAt || (original == null && snapshot.ExpiresAt > now.AddHours(2))) throw new ProtocolException("invalid_credential");
         if (snapshot.Client.ReasoningEffort != null && !policy.SupportedReasoningEfforts.Contains(snapshot.Client.ReasoningEffort, StringComparer.Ordinal)) throw new ProtocolException("configuration_unsupported");
         if (policy.RequiresLicense && snapshot.Mirrors.Any(m => m.License is null)) throw new ProtocolException("configuration_unsupported");
-        if (snapshot.Selection.KeyHint.Contains(code.Credential.Value) || snapshot.Service.Name.Contains(code.Credential.Value) || snapshot.Selection.KeyLabel.Contains(code.Credential.Value) || snapshot.Selection.GroupLabel.Contains(code.Credential.Value)) throw new ProtocolException();
+        if (snapshot.SessionId.Contains(code.Credential.Value) || snapshot.Selection.KeyHint.Contains(code.Credential.Value) || snapshot.Service.Name.Contains(code.Credential.Value) || snapshot.Selection.KeyLabel.Contains(code.Credential.Value) || snapshot.Selection.GroupLabel.Contains(code.Credential.Value)) throw new ProtocolException();
         var links = new List<string?> { snapshot.Service.WebsiteUrl, snapshot.Service.HelpUrl };
         foreach (var mirror in snapshot.Mirrors) { links.Add(mirror.Package.Url); links.Add(mirror.License?.Url); }
         foreach (var link in links)

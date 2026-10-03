@@ -1,11 +1,15 @@
 # AGSP v1 contract
 
-This directory contains the neutral AI Gateway Setup Protocol v1 implementation
-contract published with [AI Desktop Setup](https://github.com/macworld/ai-desktop-setup).
-It remains a candidate contract, not an industry standard or proof of working
-client/service interoperability. All services, dates, credentials, models, packages
-and hashes in the examples are fictional. Predictable fixture secrets must never be issued in a
-real service.
+The AI Gateway Setup Protocol (AGSP) defines how a gateway issues setup codes and
+provides authenticated configuration to a desktop setup client. This directory
+contains the v1 implementation contract used by [AI Desktop Setup](../README.md),
+along with its schema and shared test vectors.
+
+AGSP v1 is a candidate contract for implementers. Gateways must implement the
+protocol to issue usable setup codes, and client adapters determine which desktop
+configurations they accept. All services, dates, credentials, models, packages,
+and hashes in the examples are fictional. Predictable fixture secrets must never
+be issued in a real service.
 
 - [Protocol](agsp-v1.md): normative behavior, trust boundaries and validation rules.
 - [JSON Schema](agsp-v1.schema.json): Draft 2020-12 message structures.

@@ -33,6 +33,11 @@ internal static class WindowsInstallerPolicy
         return start;
     }
 
+    // Pipe error text is untrusted; present only local guidance while diagnostics keep event/exit codes.
+    internal static SetupException DeploymentFailure(string? helperError) => new("Windows 未能确认安装成功，账户配置尚未开始。请重试或联系管理员。");
+
+    internal static InstallState RegistrationOutcome(InstallState registered, bool needsRestart) => new(registered.Installed, registered.NeedsSignOut, registered.NeedsRestart || needsRestart);
+
     internal const string Publisher = "CN=50BDFD77-8903-4850-9FFE-6E8522F64D5B";
     internal const long MaximumPackageBytes = 10L * 1024 * 1024 * 1024;
     internal const long MaximumLicenseBytes = 1024 * 1024;
